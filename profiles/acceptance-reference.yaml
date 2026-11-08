@@ -1,0 +1,26 @@
+# Umbrales de certificación por modelo (referencia impresa / comparación portal).
+# Fuente canónica en código: tc_net_cert/reporting/reference.py
+# Sincronizar cambios aquí y en Supabase dut_profiles cuando aplique.
+
+models:
+  - name: HG8145X6-10
+    technology: ONT
+    technology_label: GPON
+    throughput_mbps: 900.0
+    optical_rx_low: -27.0
+    optical_rx_high: -8.0
+    ont_state: O5
+
+  - name: HG8245W5-6T
+    technology: ONT
+    technology_label: GPON
+    throughput_mbps: 900.0
+    optical_rx_low: -27.0
+    optical_rx_high: -8.0
+    ont_state: O5
+
+  - name: CG-2200
+    technology: EMTA
+    technology_label: DOCSIS
+    throughput_mbps: 900.0
+  # DS/US, MER, uncorrectables: ver reference.py (_EMTA_LIMITS)

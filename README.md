@@ -23,6 +23,8 @@ Release actual: **[v1.2.0](https://github.com/UrbanoTCW24/tc-net-cert/releases/t
 
 Perfil versionado (sin contraseñas): [dut-packs/cg-2200/](dut-packs/cg-2200/).
 
+Scraper + perfiles de portal/corrida en Git: [docs/SCRAPER-AND-PROFILES.md](docs/SCRAPER-AND-PROFILES.md) · carpetas [`profiles/`](profiles/) y [`fixtures/runs/`](fixtures/runs/).
+
 ## Repositorio en GitHub
 
 Propietario: **UrbanoTCW24** → `UrbanoTCW24/tc-net-cert`

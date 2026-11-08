@@ -1,0 +1,41 @@
+# Plantilla de perfiles de portal (scraper Buscar / Identidad DUT).
+# En estación: cp profiles/portals.example.yaml → ~/.config/tc-net-cert/portals.yaml
+# y complete password (NUNCA commitear contraseñas reales).
+
+profiles:
+  CG-2200:
+    host: 192.168.1.1
+    username: admin
+    password: "<REEMPLAZAR-clave-del-modem>"
+    kind: emta-broadcom
+    fingerprints:
+      - kaon
+      - broadcom
+      - cg-2200
+
+  CG-3000:
+    host: 192.168.1.1
+    username: admin
+    password: "<REEMPLAZAR>"
+    kind: emta-broadcom
+
+  CGNV5:
+    host: 192.168.1.1
+    username: admin
+    password: "<REEMPLAZAR>"
+    kind: emta-hitron
+
+  HG8145X6-10:
+    host: 192.168.1.1
+    username: admin
+    password: "<REEMPLAZAR-o-c1@r0-solo-lab>"
+    kind: huawei-ont
+    fingerprints:
+      - hg8145
+      - huawei
+
+  HG8245W5-6T:
+    host: 192.168.1.1
+    username: root
+    password: "<REEMPLAZAR>"
+    kind: huawei-ont

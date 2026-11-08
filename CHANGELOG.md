@@ -2,6 +2,13 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/). Versión en `package-overlay/tc_net_cert/version.py`.
 
+## [Unreleased]
+
+### Added
+- `profiles/`: `portals.example.yaml`, `run-profiles.yaml`, `acceptance-reference.yaml`.
+- `fixtures/runs/TC-0002-emta-bancoA.sample.json` (contrato de informe).
+- `docs/SCRAPER-AND-PROFILES.md`; perfiles incluidos en kit USB.
+
 ## [1.2.0] - 2026-11-08
 
 ### Added

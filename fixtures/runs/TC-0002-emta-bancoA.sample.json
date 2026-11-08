@@ -1,0 +1,27 @@
+{
+  "title": "Ethernet Port Performance & Functional Certification",
+  "run_id": "TC-0002",
+  "tool_version": "1.2.0",
+  "schema_version": "1.0.0",
+  "network_mode": "DHCP",
+  "profile": "gigabit",
+  "speed_profile": "1G",
+  "dut_profile": "emta",
+  "dut": {
+    "type": "emta",
+    "brand": "KAON",
+    "model": "CG-2200",
+    "serial": "BS10007554006224",
+    "mac": "54:7e:1a:31:2e:d0",
+    "firmware": "1.4.0",
+    "hardware": "v1.0",
+    "device_type": "DOCSIS 3.0",
+    "ssid_24": "HOLA-06",
+    "ssid_50": "HOLA-5.0",
+    "wifi_password_24": "<redacted>",
+    "wifi_password_50": "<redacted>"
+  },
+  "bench_scope": "A",
+  "global_verdict": "PASS",
+  "note": "Muestra anonimizada para contrato JSON; sin claves Wi‑Fi ni datos de operador."
+}

@@ -1,0 +1,56 @@
+# Perfiles de corrida (qué etapas ejecuta cada tipo de DUT).
+# Espejo de config defaults; al desplegar en flota se instala con provision.
+# La estación puede sobreescribir en /etc/tc-net-cert/config.yaml → dut_profiles:
+
+dut_profiles:
+  ont:
+    mode: dhcp
+    ports: 4
+    test_cross_ports: true
+    test_gateway: true
+    simultaneous: true
+    bidirectional: true
+    throughput: true
+  emta:
+    mode: dhcp
+    ports: 4
+    test_cross_ports: true
+    test_gateway: true
+    simultaneous: true
+    bidirectional: false
+    throughput: true
+  switch:
+    mode: static
+    ports: 4
+    test_cross_ports: true
+    test_gateway: false
+    simultaneous: true
+    bidirectional: true
+    throughput: true
+
+# Perfiles físicos (enlace + iperf) — active_profile / active_speed_profile en config
+profiles:
+  gigabit:
+    expected_link_speed: 1000
+    expected_duplex: full
+    minimum_throughput_mbps: 900.0
+  "100M":
+    expected_link_speed: 100
+    expected_duplex: full
+    minimum_throughput_mbps: 90.0
+  "2.5G":
+    expected_link_speed: 2500
+    expected_duplex: full
+    minimum_throughput_mbps: 2250.0
+
+simultaneous_pairs_banco_a:
+  - [LAN1, LAN3]
+  - [LAN2, LAN4]
+simultaneous_pairs_banco_b:
+  - [LAN5, LAN7]
+  - [LAN6, LAN8]
+
+iperf:
+  duration_seconds: 120
+  streams: 4
+  allowed_durations: [30, 60, 120, 300, 600, 1800, 3600, 7200]

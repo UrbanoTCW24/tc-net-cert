@@ -53,8 +53,10 @@ if [[ -f "${ROOT}/package-overlay/techcorp-lab-root" ]]; then
     chmod 755 "${OUT}/provision/techcorp-lab-root"
 fi
 
-mkdir -p "${OUT}/docs"
+mkdir -p "${OUT}/docs" "${OUT}/profiles" "${OUT}/fixtures/runs"
 [[ -f "${ROOT}/docs/supabase/dut_profiles.sql" ]] && cp -a "${ROOT}/docs/supabase/dut_profiles.sql" "${OUT}/docs/"
+[[ -d "${ROOT}/profiles" ]] && cp -a "${ROOT}/profiles/"* "${OUT}/profiles/" 2>/dev/null || true
+[[ -d "${ROOT}/fixtures/runs" ]] && cp -a "${ROOT}/fixtures/runs/"* "${OUT}/fixtures/runs/" 2>/dev/null || true
 
 cat >"${OUT}/version.json" <<EOF
 {
@@ -90,8 +92,9 @@ PC YA INSTALADA (solo software):
 
 Después de instalar:
   1. Editar /etc/tc-net-cert/config.yaml (MACs, station, operator).
-  2. Copiar supabase.env a /root/.config/tc-net-cert/supabase.env (chmod 0600).
-  3. Abrir http://127.0.0.1:8080/ y usar «Sincronizar reglas».
+  2. cp profiles/portals.example.yaml → ~/.config/tc-net-cert/portals.yaml (contraseñas del módem).
+  3. Copiar supabase.env a /root/.config/tc-net-cert/supabase.env (chmod 0600).
+  4. Abrir http://127.0.0.1:8080/ y usar «Sincronizar reglas».
 
 Forzar plantilla 4 u 8 LAN:
   TC_NET_CERT_LAYOUT=4lan|8lan sudo bash provision/install-station.sh
