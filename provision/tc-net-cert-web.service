@@ -1,0 +1,16 @@
+[Unit]
+Description=TC-NET-CERT local certification dashboard
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/tc-net-cert/venv/bin/tc-net-cert web --host 127.0.0.1 --port 8080
+Environment=HOME=/root
+Environment=TC_NET_CERT_PORTALS=/root/.config/tc-net-cert/portals.yaml
+Environment=TC_NET_CERT_SUPABASE=/root/.config/tc-net-cert/supabase.env
+Restart=on-failure
+User=root
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

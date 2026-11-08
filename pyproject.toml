@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tc-net-cert"
+description = "TECHCORP LAB — estación de certificación Ethernet (panel local + CLI)"
+readme = "docs/REPORTE-DUAL-BENCH.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+authors = [{ name = "TECHCORP Lab Platform" }]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "jinja2>=3.1",
+    "psycopg[binary]>=3.1",
+    "requests>=2.31",
+]
+dynamic = ["version"]
+
+[project.scripts]
+tc-net-cert = "tc_net_cert.cli.app:main"
+
+[project.urls]
+Homepage = "https://github.com/techcorp/lab"
+
+[tool.setuptools.dynamic]
+version = { attr = "tc_net_cert.version.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["package-overlay"]
+include = ["tc_net_cert*"]
+
+[tool.setuptools.package-data]
+tc_net_cert = [
+    "web/templates/*",
+    "reporting/templates/*",
+    "config/defaults/*",
+]

@@ -1,0 +1,4 @@
+global-exclude __pycache__
+global-exclude *.py[cod]
+global-exclude *.pyo
+prune package-overlay/tc_net_cert/**/__pycache__

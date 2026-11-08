@@ -1,0 +1,98 @@
+# Tag vX.Y.Z → wheel + update_offer.json + GitHub Release (opcional Supabase HQ).
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Resolve version from tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches package version
+        run: |
+          PKG="$(grep -E '^__version__' package-overlay/tc_net_cert/version.py | sed -E 's/.*"([^"]+)".*/\1/')"
+          if [ "${PKG}" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "Tag ${{ steps.meta.outputs.tag }} but version.py is ${PKG}"
+            exit 1
+          fi
+
+      - name: Build wheel and USB kit
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+          bash scripts/build-usb-kit.sh
+
+      - name: Write update_offer.json for GitHub Release URL
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+          VER: ${{ steps.meta.outputs.version }}
+        run: |
+          WHL="dist_usb/tc_net_cert-${VER}-py3-none-any.whl"
+          SHA256="$(sha256sum "${WHL}" | awk '{print $1}')"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/$(basename "${WHL}")"
+          export SHA256 URL WHL VER TAG
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          ver = os.environ["VER"]
+          whl = Path(os.environ["WHL"])
+          offer = {
+              "version": ver,
+              "url": os.environ["URL"],
+              "mandatory": False,
+              "channel": "lab",
+              "sha256": os.environ["SHA256"],
+              "wheel": whl.name,
+              "note": f"GitHub release {os.environ['TAG']}",
+          }
+          out = Path("dist_usb/update_offer.json")
+          out.write_text(json.dumps(offer, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: tc-net-cert ${{ steps.meta.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist_usb/tc_net_cert-${{ steps.meta.outputs.version }}-py3-none-any.whl
+            dist_usb/update_offer.json
+            dist_usb/version.json
+
+      - name: Publish wheel to Supabase (opcional HQ)
+        env:
+          SUPABASE_PROJECT_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        if: env.SUPABASE_PROJECT_URL != '' && env.SUPABASE_SERVICE_ROLE_KEY != ''
+        run: |
+          printf '%s\n' \
+            "project_url=${SUPABASE_PROJECT_URL}" \
+            "service_role_key=${SUPABASE_SERVICE_ROLE_KEY}" \
+            "storage_bucket=lab-releases" > /tmp/supabase-publish.env
+          python3 -m pip install requests 'psycopg[binary]'
+          python3 scripts/upload_release.py \
+            --whl "dist/tc_net_cert-${{ steps.meta.outputs.version }}-py3-none-any.whl" \
+            --env /tmp/supabase-publish.env \
+            --public \
+            --out dist_usb/update_offer-supabase.json
+          rm -f /tmp/supabase-publish.env

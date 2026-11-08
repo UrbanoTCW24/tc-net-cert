@@ -1,0 +1,141 @@
+# Plantilla dual-banco — 8 LAN (A: LAN1–4, B: LAN5–8).
+# Copiar a /etc/tc-net-cert/config.yaml y completar MACs reales de ESTA PC.
+# NO incluir en el wheel ni en git con datos de producción.
+schema_version: "1.0.0"
+safe_mode: true
+operator: "OPERADOR"
+station: "LAB-XX"
+runs_dir: ""
+report_title: "Ethernet Port Performance & Functional Certification"
+
+active_profile: gigabit
+active_speed_profile: "1G"
+
+network:
+  mode: dhcp
+  static_addresses: {}
+  static_gateways: {}
+
+ports:
+  LAN1:
+    mac: "aa:bb:cc:dd:ee:01"
+  LAN2:
+    mac: "aa:bb:cc:dd:ee:02"
+  LAN3:
+    mac: "aa:bb:cc:dd:ee:03"
+  LAN4:
+    mac: "aa:bb:cc:dd:ee:04"
+  LAN5:
+    mac: "aa:bb:cc:dd:ee:05"
+  LAN6:
+    mac: "aa:bb:cc:dd:ee:06"
+  LAN7:
+    mac: "aa:bb:cc:dd:ee:07"
+  LAN8:
+    mac: "aa:bb:cc:dd:ee:08"
+
+simultaneous_pairs:
+  - [LAN1, LAN3]
+  - [LAN2, LAN4]
+
+benches:
+  A:
+    label: Banco A
+    ports: [LAN1, LAN2, LAN3, LAN4]
+  B:
+    label: Banco B
+    ports: [LAN5, LAN6, LAN7, LAN8]
+
+speed_profiles:
+  "100M":
+    expected_speed_mbps: 100
+    minimum_throughput_mbps: 90
+  "1G":
+    expected_speed_mbps: 1000
+    minimum_throughput_mbps: 900
+  "2.5G":
+    expected_speed_mbps: 2500
+    minimum_throughput_mbps: 2250
+
+profiles:
+  "100M":
+    expected_link_speed: 100
+    expected_duplex: full
+    minimum_throughput_mbps: 90
+    max_rx_errors: 0
+    max_tx_errors: 0
+    max_drops: 0
+    max_carrier_changes: 0
+    link_flap_result: FAIL
+  gigabit:
+    expected_link_speed: 1000
+    expected_duplex: full
+    minimum_throughput_mbps: 900
+    max_rx_errors: 0
+    max_tx_errors: 0
+    max_drops: 0
+    max_carrier_changes: 0
+    link_flap_result: FAIL
+  "2.5G":
+    expected_link_speed: 2500
+    expected_duplex: full
+    minimum_throughput_mbps: 2250
+    max_rx_errors: 0
+    max_tx_errors: 0
+    max_drops: 0
+    max_carrier_changes: 0
+    link_flap_result: FAIL
+
+dut_profiles:
+  ont:
+    mode: dhcp
+    ports: 4
+    test_cross_ports: true
+    test_gateway: true
+    simultaneous: true
+    bidirectional: true
+    throughput: true
+  emta:
+    mode: dhcp
+    ports: 4
+    test_cross_ports: true
+    test_gateway: true
+    simultaneous: true
+    bidirectional: false
+    throughput: true
+  switch:
+    mode: static
+    ports: 4
+    test_cross_ports: true
+    test_gateway: false
+    simultaneous: true
+    bidirectional: true
+    throughput: true
+
+dhcp:
+  backend: dhcpcd
+  timeout_seconds: 30
+
+iperf:
+  duration_seconds: 120
+  streams: 4
+  base_port: 5201
+  run_single_stream: false
+  allowed_durations: [30, 60, 120, 300, 600, 1800, 3600, 7200]
+  allowed_streams: [1, 2, 4, 8]
+
+ping:
+  count: 5
+  timeout_seconds: 2
+
+dut:
+  type: ont
+  model: ""
+  serial: ""
+  mac: ""
+  firmware: ""
+  lot: ""
+  work_order: ""
+
+long_duration_seconds: 300
+require_profile_port_count: true

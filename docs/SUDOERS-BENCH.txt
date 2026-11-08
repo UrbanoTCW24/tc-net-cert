@@ -1,0 +1,7 @@
+# Añadir a la regla sudoers de techcorp-lab-root (ejemplo):
+# Cmnd_Alias TC_LAB = /usr/local/sbin/techcorp-lab-root test *, \
+#   /usr/local/sbin/techcorp-lab-root signal *, \
+#   /usr/local/sbin/techcorp-lab-root link *, \
+#   /usr/local/sbin/techcorp-lab-root bench-reset *, \
+#   /usr/local/sbin/techcorp-lab-root ports-remap *, \
+#   /usr/local/sbin/techcorp-lab-root ports-remap-bench *

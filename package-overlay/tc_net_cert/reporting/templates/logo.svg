@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 565 280" width="113" height="56" role="img" aria-label="TECHCORP">
+  <rect width="565" height="280" fill="#ffffff"/>
+  <g fill="#2e3165">
+    <rect x="15" y="15" width="220" height="55"/>
+    <rect x="95" y="15" width="60" height="250"/>
+  </g>
+  <g fill="#2e3165">
+    <circle cx="405" cy="140" r="125"/>
+    <circle cx="405" cy="140" r="76" fill="#ffffff"/>
+    <rect x="405" y="112" width="145" height="56" fill="#ffffff"/>
+    <circle cx="405" cy="140" r="31" fill="#2e3165"/>
+  </g>
+</svg>

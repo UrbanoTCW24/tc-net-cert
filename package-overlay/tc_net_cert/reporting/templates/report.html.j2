@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ sheet.order }} — TECHCORP LAB</title>
+  <style>
+    :root { color-scheme: only light; }
+    * { box-sizing: border-box; }
+    html, body { background: #fff; }
+    body { margin: 0 auto; max-width: 920px; padding: 28px 36px 40px; color: #1a1a1a; font-family: "Segoe UI", Arial, sans-serif; font-size: 13px; }
+    header { display: flex; justify-content: flex-end; gap: 14px; align-items: center; }
+    .brand { text-align: left; }
+    .brand strong { display: block; color: #0c2d6b; font-size: 22px; letter-spacing: 0.04em; line-height: 1; }
+    .brand span { display: block; margin-top: 3px; font-size: 11px; letter-spacing: 0.04em; color: #243044; }
+    .brand a { color: #1d4e89; font-size: 12px; text-decoration: none; }
+    .identity { margin: 18px 0 8px; text-align: right; line-height: 1.45; }
+    .identity .order { font-weight: 700; }
+    .result { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 18px; }
+    .kicker { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.02em; }
+    h2 { margin: 4px 0 2px; color: #16a34a; font-size: 28px; letter-spacing: 0.03em; }
+    h2.fail { color: #b91c1c; }
+    .sub { margin: 0; color: #243044; }
+    .stamp { width: 74px; height: 74px; border: 3px solid #16a34a; border-radius: 50%; color: #16a34a; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; letter-spacing: 0; transform: rotate(-8deg); }
+    .stamp.fail { border-color: #b91c1c; color: #b91c1c; }
+    h3 { margin: 18px 0 6px; font-size: 13px; letter-spacing: 0.04em; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 8px; }
+    th { text-align: left; font-size: 11px; letter-spacing: 0.04em; color: #5c6b7a; border-bottom: 1px solid #d5dbe3; padding: 4px 6px; }
+    td { border-bottom: 1px solid #e6ebf2; padding: 4px 6px; vertical-align: top; }
+    td.state { font-weight: 700; }
+    .ok, .pass { color: #16a34a; }
+    .fail { color: #b91c1c; }
+    .obs { color: #b45309; }
+    .info, .not { color: #3d4a5c; font-weight: 650; }
+    tr.group td { background: #f4f7fb; color: #0c2d6b; font-weight: 700; letter-spacing: 0.04em; font-size: 11px; }
+    footer { margin-top: 22px; color: #5c6b7a; font-size: 11px; }
+    .sheet-2 { break-before: page; margin-top: 36px; }
+    .optic { margin-top: 14px; border: 1px solid #e6ebf2; border-top: 3px solid #1d4e89; border-radius: 10px; padding: 12px 14px 8px; }
+    .optic h3 { margin: 0 0 8px; }
+    .optic-top { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+    .legend { margin: 0; color: #3d4a5c; }
+    .swatch { display: inline-block; width: 22px; height: 3px; margin: 0 6px 0 12px; vertical-align: middle; }
+    .swatch.rx { background: #2563eb; margin-left: 0; }
+    .swatch.tx { background: #16a34a; }
+    .swatch.meter-ds { background: #22d3ee; margin-left: 0; }
+    .swatch.meter-us { background: #4ade80; }
+    .swatch.meter-bad { background: #fb7185; }
+    .swatch.meter-ofdm { background: #c4b5fd; }
+    .rf-meter { display: block; margin-top: 8px; border-radius: 12px; }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip { border: 1px solid #e6ebf2; border-radius: 8px; padding: 6px 10px; min-width: 108px; }
+    .chip small, .levels small, .levels span { display: block; color: #5c6b7a; font-size: 11px; }
+    .chip b, .levels b { font-size: 16px; }
+    .optic-note { margin: 4px 0 0; color: #5c6b7a; font-size: 12px; }
+    .levels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; }
+    .levels strong { display: block; margin-top: 2px; }
+    @media print {
+      html, body { background: #fff; }
+      body { padding: 0.4cm 0.6cm; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+{% if sheet.emta %}
+  <header>
+    {% autoescape false %}{% include "logo.svg" %}{% endautoescape %}
+    <div class="brand">
+      <strong>TECHCORP</strong>
+      <span>REPORTE TÉCNICO DE CERTIFICACIÓN CPE — EMTA / DOCSIS</span>
+      <a href="https://www.techcorpca.com">www.techcorpca.com</a>
+    </div>
+  </header>
+  <div class="identity">
+    <div class="order">ORDEN: {{ sheet.order }}</div>
+    <div>SN: {{ sheet.serial }}</div>
+    <div>{{ sheet.long_date }}</div>
+  </div>
+  <div class="result">
+    <div>
+      <p class="kicker">RESULTADO DE CERTIFICACIÓN</p>
+      <h2 class="{{ 'fail' if not sheet.approved else '' }}">{{ sheet.headline }}</h2>
+      <p class="sub">{{ sheet.short_stamp }} · ID {{ sheet.record_id }} · {{ sheet.summary }} · Hoja 1/2</p>
+    </div>
+    <div class="stamp {{ 'fail' if not sheet.approved else '' }}">{{ sheet.stamp }}</div>
+  </div>
+  <h3>PARÁMETROS · LEÍDO VS ESPERADO</h3>
+  <p class="sub">{{ sheet.emta_tally }}</p>
+  <table>
+    <thead>
+      <tr><th>PARÁMETRO</th><th>LEÍDO</th><th>ESPERADO</th><th>CUMPLE</th></tr>
+    </thead>
+    <tbody>
+      {% set section = namespace(name="") %}
+      {% for row in sheet.rows %}
+      {% if row.section != section.name %}
+      {% set section.name = row.section %}
+      <tr class="group"><td colspan="4">{{ row.section }}</td></tr>
+      {% endif %}
+      <tr>
+        <td>{{ row.name }}</td>
+        <td>{{ row.read }}</td>
+        <td>{{ row.expected }}</td>
+        <td class="state {{ 'pass' if row.state == 'Sí' else ('fail' if row.state == 'No' else 'not') }}">{{ row.state }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <footer>
+    Documento generado por TECHCORP. © {{ sheet.year }} TECHCORP. Todos los derechos reservados. · www.techcorpca.com · Hoja 1/2
+    <br>Hoja 1/2. El throughput Wi-Fi 5.0 GHz y 2.4 GHz queda en QOS / TRÁFICO y no cambia el veredicto de los LAN.
+    <br>No certifica: {{ report.scope_exclusions | join(" · ") }}
+    <br>{{ report.disclaimer }}
+  </footer>
+  <section class="sheet-2">
+    <header>
+      <div class="brand">
+        <strong>TECHCORP — Anexo RF</strong>
+        <span>ORDEN: {{ sheet.order }} · Hoja 2/2</span>
+      </div>
+    </header>
+    <h3>DETALLE DE CANALES RF</h3>
+    <table>
+      <thead>
+        <tr><th>CANAL</th><th>ESTADO</th><th>MODULACIÓN</th><th>ID / FRECUENCIA</th><th>POTENCIA</th><th>SNR</th><th>CORREGIBLES</th><th>INCORREGIBLES</th></tr>
+      </thead>
+      <tbody>
+        <tr class="group"><td colspan="8">DOWNSTREAM (DS)</td></tr>
+        {% if sheet.ds_rows %}
+        {% for row in sheet.ds_rows %}
+        <tr>
+          <td>{{ row.channel }}</td>
+          <td>{{ row.state }}</td>
+          <td>{{ row.modulation }}</td>
+          <td>{{ row.identity }}</td>
+          <td>{{ row.power }}</td>
+          <td>{{ row.snr }}</td>
+          <td>{{ row.correctable }}</td>
+          <td>{{ row.uncorrectable }}</td>
+        </tr>
+        {% endfor %}
+        {% if sheet.ds_correctable_total or sheet.ds_uncorrectable_total %}
+        <tr>
+          <td colspan="6">Total</td>
+          <td>{{ sheet.ds_correctable_total or "—" }}</td>
+          <td>{{ sheet.ds_uncorrectable_total or "—" }}</td>
+        </tr>
+        {% endif %}
+        {% else %}
+        <tr><td colspan="8">Sin lectura de canales downstream en esta unidad.</td></tr>
+        {% endif %}
+        <tr class="group"><td colspan="8">UPSTREAM (US)</td></tr>
+        {% if sheet.us_rows %}
+        {% for row in sheet.us_rows %}
+        <tr>
+          <td>{{ row.channel }}</td>
+          <td>{{ row.state }}</td>
+          <td>{{ row.modulation }}</td>
+          <td>{{ row.identity }}</td>
+          <td>{{ row.power }}</td>
+          <td>{{ row.snr }}</td>
+          <td>{{ row.correctable }}</td>
+          <td>{{ row.uncorrectable }}</td>
+        </tr>
+        {% endfor %}
+        {% else %}
+        <tr><td colspan="8">Sin lectura de canales upstream en esta unidad.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+    {{ sheet.rf_chart | safe }}
+    <h3>DESGLOSE DE CERTIFICACIÓN FÍSICA</h3>
+    <table>
+      <thead>
+        <tr><th>PRUEBA</th><th>LEÍDO</th><th>CRITERIO</th><th>RESULTADO</th></tr>
+      </thead>
+      <tbody>
+        {% for row in sheet.physical_rows %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.read }}</td>
+          <td>{{ row.expected }}</td>
+          <td class="state {{ 'pass' if row.state == 'PASS' else ('fail' if row.state == 'FAIL' else ('obs' if row.state == 'OBSERVACION' else 'not')) }}">{{ row.state }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <footer>
+      Documento generado por TECHCORP. © {{ sheet.year }} TECHCORP. Todos los derechos reservados. · www.techcorpca.com · Hoja 2/2
+      <br>Verde: DS ≥ 16, RX −10…10 dBmV, US TX 30–61 dBmV. Ámbar: DS 5–15 o un solo canal US. Rojo: DS ≤ 4, TX &lt; 30 dBmV o MER &lt; 28 dB. FEC ausente = NO_MEDIDO.
+    </footer>
+  </section>
+{% elif sheet.ont %}
+  <header>
+    {% autoescape false %}{% include "logo.svg" %}{% endautoescape %}
+    <div class="brand">
+      <strong>TECHCORP</strong>
+      <span>REPORTE TÉCNICO DE CERTIFICACIÓN CPE</span>
+      <a href="https://www.techcorpca.com">www.techcorpca.com</a>
+    </div>
+  </header>
+  <div class="identity">
+    <div class="order">ORDEN: {{ sheet.order }}</div>
+    <div>{{ sheet.long_date }}</div>
+  </div>
+  <div class="result">
+    <div>
+      <p class="kicker">RESULTADO DE CERTIFICACIÓN</p>
+      <h2 class="{{ 'fail' if not sheet.approved else '' }}">{{ sheet.headline_cpe }}</h2>
+      <p class="sub">{{ sheet.short_stamp }} · {{ sheet.duration }} · {{ sheet.order }} · {{ sheet.percent }} · Hoja 1/2</p>
+    </div>
+    <div class="stamp {{ 'fail' if not sheet.approved else '' }}">{{ sheet.stamp }}</div>
+  </div>
+  <h3>DATOS DEL REPORTE · {{ sheet.tally }}</h3>
+  <table>
+    <thead>
+      <tr><th>SECCIÓN</th><th>PARÁMETRO</th><th>MEDIDO</th><th>REFERENCIA</th><th>CUMPLIMIENTO</th></tr>
+    </thead>
+    <tbody>
+      {% for row in sheet.cpe_rows %}
+      <tr>
+        <td>{{ row.section }}</td>
+        <td>{{ row.name }}</td>
+        <td>{{ row.read }}</td>
+        <td>{{ row.expected }}</td>
+        <td class="state {{ 'pass' if row.state == 'CUMPLE' else ('fail' if row.state == 'NO CUMPLE' or row.state == 'OBSERVACIÓN' else 'not') }}">{{ row.state }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <footer>
+    Hoja 1/2 · TECHCORP LAB · ONT · © {{ sheet.year }} TECHCORP · www.techcorpca.com
+    <br>El throughput Wi-Fi queda en la hoja 2: primero 5.0 GHz y después 2.4 GHz. Jitter, pérdida de paquetes y el estado ONT quedan SIN DATO hasta leerlos del portal de esta unidad.
+    <br>Perfil de referencia: {{ sheet.reference_name }}. El throughput de los LAN se compara con esa referencia.
+    <br>{{ report.disclaimer }}
+  </footer>
+  <section class="sheet-2">
+    <header>
+      <div class="brand">
+        <strong>TECHCORP</strong>
+        <span>ORDEN: {{ sheet.order }} · Hoja 2/2</span>
+      </div>
+    </header>
+    <h3>DETALLE DE THROUGHPUT</h3>
+    <table>
+      <thead>
+        <tr><th>PRUEBA</th><th>MEDIDO</th><th>REFERENCIA</th><th>CUMPLIMIENTO</th></tr>
+      </thead>
+      <tbody>
+        {% for row in sheet.throughput_rows %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.read }}</td>
+          <td>{{ row.reference }}</td>
+          <td class="state {{ 'pass' if row.state == 'CUMPLE' else ('fail' if row.state == 'NO CUMPLE' else 'not') }}">{{ row.state }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {{ sheet.optical_chart | safe }}
+    {% if sheet.wan_rows %}
+    <h3>SERVICIOS WAN · APROVISIONAMIENTO</h3>
+    <table>
+      <thead>
+        <tr><th>NOMBRE</th><th>SERVICIO</th><th>ESTADO</th><th>VLAN</th><th>MODO</th><th>NAT</th><th>DIRECCIÓN</th><th>GATEWAY</th><th>TIEMPO</th></tr>
+      </thead>
+      <tbody>
+        {% for row in sheet.wan_rows %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.service }}</td>
+          <td class="state {{ 'pass' if row.status == 'Conectado' else 'not' }}">{{ row.status }}</td>
+          <td>{{ row.vlan }}</td>
+          <td>{{ row.mode }}</td>
+          <td>{{ row.nat }}</td>
+          <td>{{ row.address }}</td>
+          <td>{{ row.gateway }}</td>
+          <td>{{ row.uptime }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    <footer>
+      Documento generado por TECHCORP LAB. © {{ sheet.year }} TECHCORP. www.techcorpca.com · Hoja 2/2
+      <br>1490 nm es la recepción y 1310 nm la transmisión GPON. La barra es el nivel de esta unidad. O5 es el estado de operación.
+    </footer>
+  </section>
+{% else %}
+  <header>
+    {% autoescape false %}{% include "logo.svg" %}{% endautoescape %}
+    <div class="brand">
+      <strong>TECHCORP</strong>
+      <span>REPORTE TÉCNICO DE CERTIFICACIÓN CPE</span>
+      <a href="https://www.techcorpca.com">www.techcorpca.com</a>
+    </div>
+  </header>
+  <div class="identity">
+    <div class="order">ORDEN: {{ sheet.order }}</div>
+    <div>SN: {{ sheet.serial }}</div>
+    <div>{{ sheet.long_date }}</div>
+  </div>
+  <div class="result">
+    <div>
+      <p class="kicker">RESULTADO L4 · MATRIZ P2P · {{ sheet.link_count }} ENLACES</p>
+      <h2 class="{{ 'fail' if not sheet.approved else '' }}">{{ sheet.headline }}</h2>
+      <p class="sub">{{ sheet.short_stamp }} · p2p-2pc · {{ sheet.summary }}</p>
+    </div>
+    <div class="stamp {{ 'fail' if not sheet.approved else '' }}">{{ sheet.stamp }}</div>
+  </div>
+  <h3>EQUIPO BAJO PRUEBA</h3>
+  <table>
+    <thead>
+      <tr><th>SECCIÓN</th><th>PARÁMETRO</th><th>MEDIDO</th><th>REFERENCIA</th><th>ESTADO</th></tr>
+    </thead>
+    <tbody>
+      {% for section, parameter, measured, reference, state in sheet.identity %}
+      <tr>
+        <td>{{ section }}</td>
+        <td>{{ parameter }}</td>
+        <td>{{ measured }}</td>
+        <td>{{ reference }}</td>
+        <td class="state {{ state|lower }}">{{ state }}</td>
+      </tr>
+      {% endfor %}
+      {% for section, parameter, measured, reference, state in sheet.failures %}
+      <tr>
+        <td>{{ section }}</td>
+        <td>{{ parameter }}</td>
+        <td>{{ measured }}</td>
+        <td>{{ reference }}</td>
+        <td class="state fail">{{ state }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3>MATRIZ P2P — {{ sheet.link_count }} ENLACES</h3>
+  <table>
+    <thead>
+      <tr><th>SECCIÓN</th><th>PARÁMETRO</th><th>MEDIDO</th><th>REFERENCIA</th><th>ESTADO</th></tr>
+    </thead>
+    <tbody>
+      {% for link in sheet.links %}
+      <tr>
+        <td>{{ link.section }}</td>
+        <td>{{ link.parameter }}</td>
+        <td>{{ link.measured }}</td>
+        <td>{{ link.reference }}</td>
+        <td class="state {{ link.state|lower }}">{{ link.state }}</td>
+      </tr>
+      {% endfor %}
+      {% for item in sheet.wifi %}
+      <tr>
+        <td>Wi-Fi</td>
+        <td>{{ item.parameter }}</td>
+        <td>{{ item.measured }}</td>
+        <td>{{ item.reference }}</td>
+        <td class="state info">{{ item.state }}</td>
+      </tr>
+      {% endfor %}
+      <tr>
+        <td>Matriz P2P</td>
+        <td>Veredicto global</td>
+        <td>{{ sheet.global_measured }}</td>
+        <td>{{ sheet.global_reference }}</td>
+        <td class="state {{ sheet.global_state|lower }}">{{ sheet.global_state }}</td>
+      </tr>
+      <tr>
+        <td>L4 iPerf3</td>
+        <td>Throughput (SUM final)</td>
+        <td>{{ sheet.sum_mbps }}</td>
+        <td>{{ sheet.link_count }} enlaces agregados</td>
+        <td class="state info">INFO</td>
+      </tr>
+      <tr>
+        <td>L4 iPerf3</td>
+        <td>Throughput Promedio (Avg)</td>
+        <td>{{ sheet.avg_mbps }}</td>
+        <td>≥ {{ sheet.minimum }}</td>
+        <td class="state {{ sheet.avg_state|lower }}">{{ sheet.avg_state }}</td>
+      </tr>
+      <tr>
+        <td>L4 iPerf3</td>
+        <td>Throughput Máximo (Pico)</td>
+        <td>{{ sheet.max_mbps }}</td>
+        <td>Informativo</td>
+        <td class="state info">INFO</td>
+      </tr>
+      <tr>
+        <td>L4 iPerf3</td>
+        <td>Throughput Mínimo (Base)</td>
+        <td>{{ sheet.min_mbps }}</td>
+        <td>≥ {{ sheet.minimum }}</td>
+        <td class="state {{ sheet.min_state|lower }}">{{ sheet.min_state }}</td>
+      </tr>
+      <tr>
+        <td>L4 iPerf3</td>
+        <td>Duración</td>
+        <td>{{ sheet.duration }}</td>
+        <td>operador</td>
+        <td class="state info">INFO</td>
+      </tr>
+      <tr>
+        <td>L4 iPerf3</td>
+        <td>Criterio P2P</td>
+        <td>{{ sheet.criterion }}</td>
+        <td>Certificación Gigabit</td>
+        <td class="state info">INFO</td>
+      </tr>
+    </tbody>
+  </table>
+  <footer>
+    Hoja 1/1 · TECHCORP Lab · iPerf3 L4 · © {{ sheet.year }} TECHCORP
+    <br>Wi-Fi: EXCLUDED FROM CERTIFICATION. {{ report.disclaimer }}
+    {% if report.scope_exclusions %}<br>{{ report.scope_exclusions | join(" · ") }}{% endif %}
+  </footer>
+{% endif %}
+</body>
+</html>

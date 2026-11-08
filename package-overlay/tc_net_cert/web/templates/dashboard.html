@@ -1,0 +1,3815 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="tc-token" content="{{ token }}">
+  <title>TECHCORP LAB</title>
+  <style>
+    :root { color-scheme: light; --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --paper:#f1f5f9; --card:#fff; --navy:#0f172a; --blue:#2563eb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; display: flex; overflow: hidden; font-family: Inter, "Segoe UI", sans-serif; color: var(--ink); background: var(--paper); }
+    #sidebar { width: 16rem; flex: 0 0 16rem; display: flex; flex-direction: column; background: var(--navy); color: #fff; }
+    .side-brand { height: 4rem; display: flex; align-items: center; gap: 0.7rem; padding: 0 0.9rem; border-bottom: 1px solid #1e293b; background: #020617; }
+    .mark { background: #fff; border-radius: 8px; padding: 3px 6px; line-height: 0; }
+    .mark svg { display: block; height: 36px; width: auto; }
+    .side-brand strong { display: block; font-size: 0.82rem; letter-spacing: 0.04em; }
+    .side-brand span { display: block; font-size: 0.65rem; color: #60a5fa; letter-spacing: 0.06em; text-transform: uppercase; }
+    .device-card { margin: 0.8rem; padding: 0.7rem; border: 1px solid #334155; border-radius: 12px; background: #1e293b; }
+    .device-card p { margin: 0; }
+    .device-card .label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; }
+    #sidebar-device-name { font-size: 0.82rem; font-weight: 700; }
+    #sidebar-device-kind { font-size: 0.68rem; color: #34d399; }
+    nav { flex: 1; padding: 0.3rem 0.7rem; overflow: auto; }
+    .nav-label { margin: 0.8rem 0.4rem 0.3rem; font-size: 0.65rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.06em; }
+    .nav-item { width: 100%; display: flex; align-items: center; justify-content: space-between; margin: 0.15rem 0; padding: 0.55rem 0.7rem; border: 0; border-radius: 8px; background: transparent; color: #cbd5e1; text-align: left; font-weight: 600; cursor: pointer; }
+    .tag { font-size: 0.62rem; font-weight: 700; letter-spacing: 0.04em; padding: 0.05rem 0.35rem; border-radius: 4px; background: rgba(255,255,255,0.08); }
+    .tag.gpon { color: #67e8f9; }
+    .tag.docsis { color: #fcd34d; }
+    .nav-item.active { background: var(--blue); color: #fff; }
+    button.nav-item:disabled { background: transparent; color: #64748b; cursor: not-allowed; opacity: 0.45; }
+    .side-foot { padding: 0.7rem 0.9rem; border-top: 1px solid #1e293b; color: #94a3b8; font-size: 0.72rem; }
+    .workspace { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    header.topbar { height: 4rem; display: flex; justify-content: space-between; align-items: center; padding: 0 1.2rem; background: #fff; border-bottom: 1px solid var(--line); }
+    header.topbar h1 { margin: 0; font-size: 1.05rem; }
+    header.topbar p { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.75rem; }
+    .badges { display: flex; gap: 0.6rem; align-items: center; font-size: 0.75rem; }
+    .pill { padding: 0.25rem 0.6rem; border: 1px solid var(--line); border-radius: 999px; background: #f8fafc; }
+    .sync-rules-btn { font-size: 0.72rem; padding: 0.25rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; color: #334155; }
+    .sync-rules-btn:disabled { opacity: 0.55; cursor: wait; }
+    .update-pill.pending { border-color: #f59e0b; color: #b45309; background: #fffbeb; }
+    .update-apply-btn { font-size: 0.72rem; padding: 0.25rem 0.55rem; border: 1px solid #f59e0b; border-radius: 8px; background: #fffbeb; color: #b45309; cursor: pointer; font-weight: 600; }
+    .update-apply-btn:disabled { opacity: 0.55; cursor: wait; }
+    .update-check-btn { font-size: 0.72rem; padding: 0.25rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; color: #334155; }
+    .pw-field-row { display: flex; gap: 0.45rem; align-items: center; flex-wrap: wrap; }
+    .pw-field-row input[type="text"], .pw-field-row input[type="password"] { flex: 1 1 12rem; min-width: 8rem; }
+    .pw-field-row .check { margin: 0; font-size: 0.78rem; white-space: nowrap; }
+    .pw-visor { display: inline-flex; align-items: center; gap: 0.35rem; }
+    button.pw-reveal { font-size: 0.72rem; padding: 0.15rem 0.4rem; border: 1px solid var(--line); border-radius: 6px; background: #f8fafc; cursor: pointer; color: #475569; }
+    button.pw-reveal[aria-pressed="true"] { background: #e0f2fe; border-color: #7dd3fc; color: #0369a1; }
+    #header-run { padding: 0.1rem 0.45rem; border-radius: 6px; background: #dbeafe; color: #1d4ed8; font-weight: 700; }
+    main { flex: 1; overflow: auto; padding: 1.1rem 1.2rem 2rem; }
+    .module[hidden] { display: none; }
+    .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 1rem 1.1rem; margin-bottom: 1rem; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+    h2, h3 { margin: 0 0 0.55rem; }
+    label { display: block; font-size: 0.78rem; margin: 0.55rem 0 0.2rem; color: #475569; }
+    select, button, input { font: inherit; }
+    select, input[type="text"], input[type="password"], input[type="number"] { width: 100%; padding: 0.45rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    button { margin-top: 0.7rem; padding: 0.55rem 0.8rem; border: 0; border-radius: 8px; background: #047857; color: #fff; font-weight: 650; cursor: pointer; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    button.secondary { background: #1e40af; }
+    button.nav-item { margin-top: 0; }
+    .note, .banner { font-size: 0.92rem; line-height: 1.4; }
+    #identity-line { white-space: pre-line; }
+    .banner { margin: 1rem 1.5rem 0; padding: 0.75rem 1rem; border-radius: 8px; background: #fff4d6; border: 1px solid #e6c36a; }
+    .verdict { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px; font-weight: 700; }
+    .verdict-PASS { background: #e5f6ea; color: #146c2e; }
+    .verdict-FAIL { background: #fde8e8; color: #9b1c1c; }
+    .verdict-INCONCLUSIVE, .verdict-EN-CURSO { background: #fff4d6; color: #8a5a00; }
+    table { border-collapse: collapse; width: 100%; margin: 0.4rem 0 1rem; }
+    th, td { border: 1px solid var(--line); padding: 0.4rem 0.5rem; text-align: left; }
+    th { background: #f3f6fa; }
+    iframe { width: 100%; height: 720px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    a { color: #0b3a66; }
+    pre { white-space: pre-wrap; background: #111827; color: #e5e7eb; padding: 0.7rem; border-radius: 8px; max-height: 180px; overflow: auto; }
+    .live-stack { display: flex; flex-direction: column; gap: 1rem; }
+    .live-title { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
+    .run-panel h2 { font-size: 1.05rem; }
+    .run-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.6rem; }
+    .run-actions { display: flex; gap: 0.6rem; align-items: center; margin-top: 0.8rem; }
+    .run-actions button { width: auto; margin-top: 0; }
+    button.stop { margin-top: 0.45rem; background: #9b1c1c; }
+    button.stop:disabled { background: #c9b4b4; cursor: not-allowed; }
+    .clock-box { display: flex; align-items: center; gap: 0.7rem; background: #0f172a; color: #fff; padding: 0.7rem 1rem; border-radius: 12px; min-width: 9rem; }
+    .clock { font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; font-weight: 720; color: #34d399; }
+    .clock-idle { color: #94a3b8; font-size: 1.4rem; }
+    .clock-box small { display: block; color: #94a3b8; font-size: 0.62rem; letter-spacing: 0.06em; text-transform: uppercase; }
+    .meter { height: 6px; background: #1e293b; border-radius: 99px; overflow: hidden; margin-top: 0.35rem; }
+    .meter span { display: block; height: 100%; background: #34d399; width: 0%; }
+    .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.8rem; align-items: stretch; }
+    .lan-card { height: 100%; display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; background: #fff; overflow: hidden; }
+    .lan-card .body { flex: 1; }
+    .lan-head { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; padding: 0.55rem 0.75rem; background: #f8fafc; border-bottom: 1px solid var(--line); }
+    .lan-head h3 { margin: 0; font-size: 0.85rem; }
+    .lan-card .body { padding: 0.75rem; }
+    .badge { font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 6px; background: #e2e8f0; color: #334155; }
+    .badge.pass { background: #d1fae5; color: #047857; }
+    .badge.fail { background: #fee2e2; color: #b91c1c; }
+    .badge.rx { background: #cffafe; color: #0e7490; }
+    .led { display: inline-block; width: 0.85rem; height: 0.85rem; margin-right: 0.35rem; border-radius: 50%; background: #c5ced8; vertical-align: -0.05rem; }
+    .led.on { background: #1f9d55; animation: blink 0.45s steps(2) infinite; }
+    .led.fail { background: #9b1c1c; }
+    @keyframes blink { 50% { opacity: 0.2; } }
+    .lan-card dl { display: grid; grid-template-columns: 6.2rem 1fr; gap: 0.15rem 0.4rem; margin: 0; font-size: 0.9rem; }
+    .lan-card dt { color: #5c6b7a; }
+    .lan-card dd { margin: 0; font-variant-numeric: tabular-nums; }
+    .lan-card .now { margin: 0 0 0.4rem; }
+    .lan-card button { margin-top: 0.6rem; background: #1d4e89; }
+    .wifi-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .wifi-actions button { width: auto; margin-top: 0.4rem; background: #243044; }
+    .wifi-table { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
+    .wifi-table th, .wifi-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #1e293b; font-size: 0.85rem; }
+    .wifi-table th { color: #94a3b8; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .wifi-table tr.active td { color: #5eead4; }
+    #wifi-scan { width: auto; margin: 0; background: #1d4e89; }
+    .pager { display: flex; gap: 0.5rem; align-items: center; }
+    .pager button, .history-tools button { width: auto; margin: 0; padding: 0.45rem 0.8rem; background: #1d4e89; }
+    .history-tools { display: flex; justify-content: space-between; gap: 1rem; align-items: end; margin: 0.2rem 0 0.7rem; }
+    .history-tools label { margin: 0 0 0.25rem; }
+    .history-tools input { width: min(320px, 100%); }
+    a.pdf-btn { display: inline-block; margin-left: 0.4rem; padding: 0.12rem 0.45rem; border-radius: 6px; background: #1d4e89; color: #fff; font-size: 0.72rem; font-weight: 700; text-decoration: none; }
+    .verdict-SKIPPED, .verdict-NOT_RUN, .verdict-NOT-RUN { background: #eef1f5; color: #3d4a5c; }
+    .stored-yes { color: #146c2e; font-weight: 700; }
+    .stored-no { color: #9b1c1c; font-weight: 700; }
+    .col-filter, .group-count, .filter-menu button { width: auto; margin: 0; }
+    .col-filter { padding: 0; background: transparent; color: #5c6b7a; font-size: 0.68rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .col-filter.filtering { color: #1d4e89; }
+    .filter-menu { position: absolute; z-index: 30; min-width: 190px; max-width: 260px; background: #fff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.16); padding: 0.5rem; }
+    .filter-menu input[type="search"] { width: 100%; margin: 0 0 0.35rem; }
+    .filter-menu .choices { max-height: 180px; overflow: auto; }
+    .filter-menu label { display: flex; gap: 0.35rem; align-items: center; margin: 0.15rem 0; font-size: 0.8rem; text-transform: none; letter-spacing: 0; color: #0f172a; }
+    .filter-menu .filter-actions { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+    .filter-menu button { padding: 0.28rem 0.5rem; background: #1d4e89; color: #fff; font-size: 0.75rem; }
+    .group-count { margin-left: 0.35rem; padding: 0.08rem 0.4rem; background: #e2e8f0; color: #0f172a; font-size: 0.72rem; }
+    .history-child td:first-child { padding-left: 1.1rem; }
+    .ref-tech { margin: 0.8rem 0; }
+    .ref-tech h3 { font-size: 0.85rem; margin-bottom: 0.35rem; }
+    .ref-picks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .ref-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.65rem;
+      margin: 0.65rem 0 0.35rem;
+      padding: 0.65rem 0.75rem;
+      border-radius: 12px;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+    }
+    .ref-toolbar-meta { font-size: 0.9rem; color: #0f172a; }
+    .ref-toolbar-meta strong { color: #0369a1; margin-right: 0.35rem; }
+    .ref-toolbar .ref-io { margin: 0; flex-wrap: wrap; }
+    .ref-toolbar-note { margin: 0 0 0.5rem; font-size: 0.82rem; }
+    .criterion-export { font-size: 0.72rem; color: #64748b; font-weight: 500; letter-spacing: normal; }
+    .rule-excel-row { font-size: 0.72rem; color: #64748b; margin: 0.15rem 0 0; }
+    button.ref-pick { width: auto; margin: 0; background: #e2e8f0; color: #0f172a; }
+    button.ref-pick.active { background: #1e40af; color: #fff; }
+    .ref-fields[hidden] { display: none; }
+    .settings-subnav { margin-bottom: 0.85rem; background: #f8fafc; border-color: #e2e8f0; box-shadow: none; }
+    .settings-subnav-tabs { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+    button.settings-pane-tab { width: auto; margin: 0; background: #e2e8f0; color: #0f172a; font-size: 0.85rem; }
+    button.settings-pane-tab.active { background: #1e40af; color: #fff; }
+    .portal-settings-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.65rem 0.75rem; margin: 0.75rem 0 0.35rem; align-items: end; }
+    .portal-settings-form label { margin: 0; }
+    .portal-settings-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin: 0.5rem 0 0.75rem; }
+    .portal-settings-actions button { width: auto; margin: 0; }
+    #portal-profiles-table button { width: auto; margin: 0; padding: 0.28rem 0.55rem; font-size: 0.75rem; background: #475569; }
+    #portal-profiles-table button.danger { background: #9b1c1c; }
+    #portal-profiles-table .pw-cell { font-family: ui-monospace, "Consolas", monospace; }
+    .lab { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .lab-card { background: #0b1220; color: #e2e8f0; border: 1px solid #1e293b; border-radius: 16px; padding: 1rem; }
+    .lab-card h3 { margin: 0 0 0.7rem; color: #5eead4; font-size: 0.95rem; }
+    .path-row { display: flex; gap: 0.5rem; margin-bottom: 0.8rem; }
+    .path-row button { flex: 1; margin: 0; background: #1e293b; color: #cbd5e1; }
+    .path-row button.active { background: #059669; color: #fff; }
+    .device-pick { display: flex; justify-content: space-between; gap: 0.6rem; align-items: center; margin-top: 0.4rem; padding: 0.75rem; border: 1px solid #134e4a; border-radius: 12px; background: #082f2c; }
+    .device-pick strong { display: block; }
+    .device-pick span { color: #5eead4; font-size: 0.85rem; }
+    #bench-grid .lab-card { padding: 0.5rem 0.6rem; }
+    #bench-grid .lab-card h3 { margin: 0 0 0.3rem; font-size: 0.8rem; font-weight: 650; letter-spacing: 0.02em; }
+    .bench-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin: 0.35rem 0 0.5rem; }
+    .bench-grid .mini-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem; }
+    .bench-grid .mini-actions button { margin-top: 0; font-size: 0.74rem; padding: 0.32rem 0.5rem; }
+    .bench-order { color: #7dd3fc; font-size: 0.68rem; display: block; margin-top: 0.2rem; line-height: 1.25; }
+    .bench-creds { margin-top: 0.3rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.2rem 0.4rem; align-items: end; }
+    .bench-creds label { font-size: 0.68rem; margin: 0; color: #94a3b8; line-height: 1.15; }
+    .bench-creds input { font-size: 0.78rem; padding: 0.28rem 0.4rem; min-height: 1.65rem; }
+    .bench-creds .bench-span-2 { grid-column: 1 / -1; }
+    .bench-cred-tools { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-top: 0.15rem; justify-content: space-between; }
+    .bench-cred-tools .check { font-size: 0.68rem; color: #94a3b8; display: inline-flex; align-items: center; gap: 0.25rem; margin: 0; }
+    .bench-cred-tools button { font-size: 0.68rem; padding: 0.25rem 0.45rem; margin: 0; }
+    .bench-pick { margin: 0 0 0.25rem; padding: 0.35rem 0.45rem; border: 1px solid #134e4a; border-radius: 8px; background: #082f2c; line-height: 1.3; }
+    .bench-pick strong { display: block; font-size: 0.8rem; color: #f1f5f9; }
+    .bench-pick .bench-route { display: inline; color: #5eead4; font-size: 0.68rem; margin-left: 0.25rem; }
+    .bench-pick .note { color: #94a3b8; font-size: 0.68rem; display: block; margin-top: 0.1rem; word-break: break-all; }
+    .portal-global-feedback { margin: 0.35rem 0 0.6rem; min-height: 1.2rem; }
+    #bench-grid .mini-actions button[data-bench-cert] { background: #059669; flex: 1 1 8rem; }
+    .bench-toolbar { margin: 0.5rem 0 0.2rem; flex-wrap: wrap; gap: 0.5rem; }
+    #certify-benches-both { background: #059669; flex: 1 1 12rem; }
+    #certify-benches-both:disabled { background: #64748b; }
+    @media (max-width: 900px) { .bench-grid { grid-template-columns: 1fr; } }
+    .live-banks, .bench-readings { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin-top: 0.45rem; }
+    .live-bank-col h3, .bench-readings h3 { margin: 0 0 0.3rem; font-size: 0.82rem; color: #0f172a; }
+    .live-bank-col .cards, .bench-readings .reading-grid { margin-top: 0; }
+    @media (max-width: 1100px) { .live-banks, .bench-readings { grid-template-columns: 1fr; } }
+    .lab-card label { color: #94a3b8; }
+    .lab-card input, .lab-card select { background: #020617; color: #e2e8f0; border-color: #334155; }
+    .check { display: flex; align-items: center; gap: 0.4rem; margin: 0.45rem 0; color: #cbd5e1; font-size: 0.85rem; }
+    .summary { margin: 0.6rem 0; padding: 0.7rem; border-radius: 10px; background: #020617; }
+    .summary strong { display: block; }
+    .summary span { color: #2dd4bf; }
+    #start-cert { width: 100%; margin-top: 0.4rem; background: #059669; font-size: 1rem; }
+    #start-cert:disabled, #discover:disabled { background: #94a3b8; }
+    [data-bench-discover].busy { opacity: 0.55; cursor: wait; }
+    .time-dialog { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; background: rgba(2, 6, 23, 0.72); }
+    .time-dialog[hidden] { display: none; }
+    .time-card { width: min(28rem, calc(100% - 2rem)); background: #0b1220; color: #e2e8f0; border: 1px solid #1e293b; border-radius: 16px; padding: 1rem 1.1rem 1.1rem; }
+    .time-card h3 { margin: 0; color: #5eead4; }
+    .time-card .note { color: #94a3b8; }
+    .time-list { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; margin-top: 0.8rem; }
+    button.time-pick { margin: 0; background: #1e293b; color: #e2e8f0; }
+    button.time-pick.active { background: #059669; color: #fff; }
+    .time-card .run-actions { margin-top: 0.9rem; }
+    #cert-time-go { flex: 1; background: #059669; }
+    #cert-time-cancel { background: #1e293b; }
+    .reading-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.35rem; margin-top: 0.25rem; font-size: 0.78rem; }
+    .metric { background: #0b1220; color: #e2e8f0; border: 1px solid #1e293b; border-radius: 12px; padding: 0.55rem 0.65rem; min-height: 4.2rem; }
+    .metric small { display: block; color: #94a3b8; font-size: 0.62rem; letter-spacing: 0.04em; text-transform: uppercase; }
+    .metric b { display: block; margin-top: 0.25rem; font-size: 0.92rem; word-break: break-word; }
+    .advanced { margin-top: 0.7rem; color: #94a3b8; }
+    .advanced summary { cursor: pointer; }
+    @media (max-width: 1100px) { .lab, .reading-grid { grid-template-columns: 1fr 1fr; } }
+    .need { color: #1d4ed8; font-weight: 700; }
+    .ref-block { margin: 0.8rem 0 0.3rem; font-size: 0.95rem; }
+    .criterion { margin: 0.9rem 0 0.2rem; }
+    .criterion-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.45rem; }
+    .criterion-head h3 { margin: 0; color: #38bdf8; font-size: 0.78rem; letter-spacing: 0.08em; }
+    .criterion-head span { min-width: 1.4rem; height: 1.4rem; border-radius: 999px; background: #1e293b; color: #e2e8f0; font-size: 0.75rem; display: inline-flex; align-items: center; justify-content: center; }
+    .rule-card { margin: 0 0 0.7rem; padding: 0.85rem 0.9rem 0.7rem; border: 1px solid #1e3a5f; border-radius: 12px; background: #0b1220; color: #e2e8f0; }
+    .rule-top { display: flex; justify-content: space-between; gap: 0.8rem; align-items: center; margin-bottom: 0.7rem; }
+    .rule-top strong { font-size: 0.95rem; }
+    .rule-top .check { margin: 0; color: #cbd5e1; font-size: 0.78rem; }
+    .rule-grid { display: grid; grid-template-columns: 1fr auto 1.3fr; gap: 0.7rem; align-items: stretch; }
+    .rule-read, .rule-expect { border: 1px solid #1e3a5f; border-radius: 10px; padding: 0.65rem 0.7rem; background: #07111f; }
+    .rule-read small, .rule-expect small { display: block; color: #38bdf8; font-size: 0.68rem; letter-spacing: 0.04em; }
+    .rule-read b { display: block; margin: 0.35rem 0; font-size: 0.92rem; }
+    .rule-read span, .rule-expect label { display: block; color: #94a3b8; font-size: 0.68rem; letter-spacing: 0.04em; }
+    .rule-read code, .rule-expect input, .rule-expect select { display: block; width: 100%; margin-top: 0.25rem; padding: 0.4rem 0.5rem; border-radius: 8px; border: 1px solid #334155; background: #020617; color: #e2e8f0; font: inherit; }
+    .rule-bounds { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.45rem; margin-top: 0.55rem; }
+    .rule-vs { align-self: center; color: #94a3b8; font-size: 0.75rem; font-weight: 700; }
+    .rule-preview { margin: 0.65rem 0 0; padding: 0.45rem 0.55rem; border-radius: 8px; background: #082f49; color: #7dd3fc; font-size: 0.75rem; }
+    .rule-preview b { color: #e0f2fe; }
+    .rule-hint { margin: 0.5rem 0 0; color: #94a3b8; font-size: 0.72rem; }
+    @media (max-width: 900px) { .rule-grid, .rule-bounds { grid-template-columns: 1fr; } }
+    @media (max-width: 1100px) {
+      .cards { grid-template-columns: 1fr 1fr; }
+      #sidebar { width: 13.5rem; flex-basis: 13.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <aside id="sidebar">
+    <div class="side-brand">
+      <div class="mark">{{ logo | safe }}</div>
+      <div>
+        <strong>TECHCORP LAB</strong>
+        <span>Consola local</span>
+      </div>
+    </div>
+    <div class="device-card">
+      <p class="label">Equipo detectado</p>
+      <p id="sidebar-device-name">{{ dut_model or "Sin equipo" }}</p>
+      <p id="sidebar-device-kind">{{ dut_type|upper }}</p>
+    </div>
+    <nav>
+      <div class="nav-label">Módulos de prueba</div>
+      <button type="button" class="nav-item active" data-tab="live">Medición en vivo</button>
+      <button type="button" class="nav-item" data-tab="ont" data-module="portal">Módulo ONT <span class="tag gpon">GPON</span></button>
+      <button type="button" class="nav-item" data-tab="emta" data-module="portal">Módulo EMTA <span class="tag docsis">DOCSIS</span></button>
+      <button type="button" class="nav-item" data-tab="wifi">Módulo Wi-Fi <span class="tag gpon">2.4 / 5</span></button>
+      <div class="nav-label">Registros</div>
+      <button type="button" class="nav-item" data-tab="history">Historial de medición</button>
+      <button type="button" class="nav-item" data-tab="settings">Ajustes y referencia</button>
+    </nav>
+    <div class="side-foot">{{ station }} · {{ operator }} · {{ port_count }} puertos · {{ network_mode }} · {{ profile }}</div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar">
+      <div>
+        <h1 id="page-title">Medición en vivo</h1>
+        <p id="page-subtitle">Dos bancos: A (LAN1–LAN4) y B (LAN5–LAN8). Después Wi‑Fi 5 y 2.4 por banco.</p>
+      </div>
+      <div class="badges">
+        <button type="button" id="btn-sync-profiles" class="sync-rules-btn" title="Actualizar reglas DUT desde Supabase">Sincronizar reglas</button>
+        <span id="profiles-sync-pill" class="pill" title="Perfiles en caché local">{{ profiles_meta.count | default(0) }} reglas</span>
+        <span id="pkg-version" class="pill" title="Versión del software">v{{ app_version }}</span>
+        <button type="button" id="btn-check-update" class="update-check-btn" title="Buscar versión en Supabase">Buscar actualización</button>
+        <button type="button" id="btn-apply-update" class="update-apply-btn" hidden title="Instalar wheel publicado">Actualizar software</button>
+        <span id="update-pill" class="pill update-pill" hidden title="Actualización disponible"></span>
+        <span id="link-badge" class="pill">Sin medición</span>
+        <span id="header-run">{{ cert.run_id if cert else "—" }}</span>
+      </div>
+    </header>
+    <div id="banner" class="banner" {% if not job.running %}hidden{% endif %}>{{ job.message }}</div>
+    <main>
+    <section class="module" id="module-live">
+        <div class="panel live-title">
+          <div>
+            <p class="note">Medición en vivo en <strong>dos bancos</strong>. Cada banco valida 4 LAN con iperf3 (dos TX, dos RX, luego cruce). Wi‑Fi 5 y 2.4 se prueban por banco con el mismo radio de la estación.</p>
+            <p id="live-detail" class="note">Sin medición.</p>
+          </div>
+          <div class="clock-box">
+            <div>
+              <small>Tiempo de ventana</small>
+              <div id="clock" class="clock clock-idle">—</div>
+              <div class="meter" aria-hidden="true"><span id="meter"></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="live-stack">
+            <p id="story" class="note"></p>
+            <p id="bench-pending-note" class="note" hidden><strong>Banco B (LAN5–LAN8):</strong> la PC ya puede tener los cables, pero falta asignarlos en software. En <strong>Módulo ONT</strong> pulsa <strong>Remapear LAN B</strong> (no es falla del ONT). Si el botón pide admin, usa el comando del script <code>remap-bench.sh</code>.</p>
+            <p id="dual-queue-note" class="note" hidden><strong>Throughput dual:</strong> los cuatro pares iperf3 corren a la vez (LAN1↔3, LAN2↔4, LAN5↔7, LAN6↔8). En la ventana cruzada invierten roles.</p>
+            <div class="live-banks">
+              <section class="live-bank-col">
+                <h3>Banco A · LAN1–LAN4</h3>
+                <div id="cards-bank-a" class="cards"></div>
+              </section>
+              <section class="live-bank-col">
+                <h3>Banco B · LAN5–LAN8</h3>
+                <div id="cards-bank-b" class="cards"></div>
+              </section>
+            </div>
+        <div class="run-panel panel">
+          <h3>Prueba de throughput</h3>
+          <div class="run-pair">
+            <div>
+              <label for="stage">Prueba</label>
+              <select id="stage">
+                {% for stage in stages %}
+                <option value="{{ stage.id }}" {% if stage.id == "simultaneous" %}selected{% endif %}>{{ stage.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label for="duration">Duración</label>
+              <select id="duration">
+                {% for item in durations %}
+                <option value="{{ item.seconds }}" {% if item.seconds == 120 %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="run-actions">
+          <button id="run" type="button" {% if job.running or not job.can_launch %}disabled{% endif %}>Correr</button>
+          <button id="recover-ns" class="secondary" type="button" {% if job.running %}disabled{% endif %}>Recuperar namespaces</button>
+          <button id="stop" class="stop" type="button" {% if not job.running %}disabled{% endif %}>Detener</button>
+          </div>
+          <p class="note">Si Correr no arranca o quedan colgados <code>ns-lan*</code>, pulsa <strong>Recuperar namespaces</strong> y vuelve a intentar.</p>
+          {% if not job.can_launch %}<p class="note">Falta pkexec, así que este panel no puede pedir permiso para mover las NIC.</p>{% endif %}
+          <p id="feedback" class="note"></p>
+          <pre id="log" {% if not job.log %}hidden{% endif %}>{{ job.log }}</pre>
+          <div class="run-actions">
+            <button id="log-download" class="secondary" type="button" {% if not job.log %}hidden{% endif %}>Descargar TXT</button>
+          </div>
+        </div>
+        </div>
+    </section>
+    <section class="module" id="module-wifi" hidden>
+      <div class="panel" style="background:transparent;border:0;box-shadow:none;padding:0;">
+        <h2>Módulo Wi-Fi</h2>
+        <p class="note">Hay <strong>un solo radio Wi‑Fi</strong> en la estación. Primero prueba el equipo del <strong>banco A</strong> (5 GHz y luego 2.4 hacia LAN2/LAN3), restaura la red del lab, y después el <strong>banco B</strong> (5 GHz y 2.4 hacia LAN6/LAN7). Antes de cada prueba, usa <em>Buscar</em> en ese banco para leer SSID y claves del portal.</p>
+        <div class="lab">
+          <div class="lab-card">
+            <h3>1. Radio de la estación</h3>
+            <p id="wifi-line" class="note">Buscando la interfaz inalámbrica.</p>
+            <p id="wifi-targets" class="note">Antes de medir, pulsa Buscar en el módulo ONT o EMTA para leer las dos redes.</p>
+            <div class="wifi-actions">
+              <button id="wifi-off" type="button">Desactivar Wi-Fi</button>
+              <button id="wifi-on" type="button">Activar Wi-Fi</button>
+            </div>
+          </div>
+          <div class="lab-card">
+            <h3>2. Throughput 5 GHz y después 2.4</h3>
+            <label for="wifi-duration">Duración de cada red</label>
+            <select id="wifi-duration">
+              <option value="30">30 s</option>
+              <option value="60" selected>1 min</option>
+              <option value="120">2 min</option>
+            </select>
+            <div class="wifi-actions">
+              <button id="wifi-run-a" type="button" {% if job.running or not job.can_launch %}disabled{% endif %}>Wi‑Fi banco A (5 + 2.4)</button>
+              <button id="wifi-run-b" type="button" {% if job.running or not job.can_launch %}disabled{% endif %}>Wi‑Fi banco B (5 + 2.4)</button>
+            </div>
+            <p id="wifi-feedback" class="note"></p>
+          </div>
+        </div>
+        <section class="panel">
+          <div class="live-title">
+            <div>
+              <h3>Redes Wi-Fi</h3>
+              <p id="wifi-scan-note" class="note">La lista muestra el canal que ve el radio de la estación.</p>
+            </div>
+            <button id="wifi-scan" type="button">Actualizar</button>
+          </div>
+          <table class="wifi-table" id="wifi-networks">
+            <thead>
+              <tr><th>Red</th><th>Canal</th><th>Banda</th><th>Frecuencia</th><th>Señal</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <div class="live-title">
+            <div>
+              <h3>Medición Wi-Fi</h3>
+              <p id="wifi-live-detail" class="note">Sin medición. Arranca al pulsar Probar Wi-Fi 5 y 2.4.</p>
+            </div>
+            <div class="clock-box">
+              <div>
+                <small>Tiempo de ventana</small>
+                <div id="wifi-clock" class="clock clock-idle">—</div>
+                <div class="meter" aria-hidden="true"><span id="wifi-meter"></span></div>
+              </div>
+            </div>
+          </div>
+          <p id="wifi-story" class="note"></p>
+          <div id="wifi-cards" class="cards"></div>
+          <div class="run-actions">
+            <button id="wifi-stop" class="stop" type="button" disabled>Detener</button>
+          </div>
+          <pre id="wifi-log" hidden></pre>
+        </section>
+      </div>
+    </section>
+    <section class="module" id="module-portal" hidden>
+      <div class="panel" style="background:transparent;border:0;box-shadow:none;padding:0;">
+        <h2 id="portal-module-title">Laboratorio de Certificación</h2>
+        <p id="portal-module-note" class="note">GPON. Lectura y certificación por cable en bancos A (LAN1–LAN4) y B (LAN5–LAN8). La LAN nativa de la PC solo lleva Internet hacia la base de datos. El Wi-Fi de la estación sirve para medir 2.4 y 5 GHz.</p>
+        <div class="bench-toolbar run-actions">
+          <button id="discover-benches" type="button">Buscar ambos bancos</button>
+          <button id="certify-benches-both" type="button">2 · Throughput A+B simultáneo</button>
+        </div>
+        <p id="portal-feedback" class="note portal-global-feedback"></p>
+        <div id="bench-grid" class="bench-grid">
+          <article class="lab-card" id="bench-card-A">
+            <h3>Banco A · LAN1–LAN4</h3>
+            <div class="bench-pick" aria-label="Selección banco A">
+              <strong id="bench-a-name">Sin equipo</strong>
+              <span id="bench-a-route" class="bench-route">Ethernet · pulsa Buscar</span>
+              <span id="bench-a-sn" class="note">SN —</span>
+              <span id="bench-a-order" class="bench-order">Orden TC —</span>
+            </div>
+            <div class="bench-creds">
+              <label for="bench-a-profile">Modelo</label>
+              <input id="bench-a-profile" list="portal-models" value="{{ portal_model }}" autocomplete="off" spellcheck="false" placeholder="HG8245…">
+              <label for="bench-a-user">Usuario</label>
+              <input id="bench-a-user" type="text" value="{{ portal_user }}" autocomplete="off" spellcheck="false">
+              <label for="bench-a-password">Contraseña</label>
+              <input id="bench-a-password" type="password" value="{{ portal_password }}" autocomplete="off">
+              <label class="bench-span-2" for="bench-a-host">Portal IP</label>
+              <input class="bench-span-2" id="bench-a-host" type="text" placeholder="192.168.1.1 · vacío = DHCP" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="bench-cred-tools">
+              <label class="check"><input id="bench-a-show-password" type="checkbox"> Ver contraseña</label>
+              <button type="button" class="secondary" data-bench-save-portal="A">Guardar perfil</button>
+            </div>
+            <div class="mini-actions">
+              <button type="button" class="secondary" data-bench-remap="A" title="Asigna NIC y reconfigura DHCP">Remapear A</button>
+              <button type="button" data-bench-discover="A">1 · Buscar</button>
+              <button type="button" class="secondary" data-bench-reset="A">Reiniciar</button>
+              <button type="button" data-bench-cert="A">2 · Certificar</button>
+            </div>
+          </article>
+          <article class="lab-card" id="bench-card-B">
+            <h3>Banco B · LAN5–LAN8</h3>
+            <div class="bench-pick" aria-label="Selección banco B">
+              <strong id="bench-b-name">Sin equipo</strong>
+              <span id="bench-b-route" class="bench-route">Ethernet · pulsa Buscar</span>
+              <span id="bench-b-sn" class="note">SN —</span>
+              <span id="bench-b-order" class="bench-order">Orden TC —</span>
+            </div>
+            <div class="bench-creds">
+              <label for="bench-b-profile">Modelo</label>
+              <input id="bench-b-profile" list="portal-models" value="" autocomplete="off" spellcheck="false" placeholder="HG8145…">
+              <label for="bench-b-user">Usuario</label>
+              <input id="bench-b-user" type="text" value="{{ portal_user }}" autocomplete="off" spellcheck="false">
+              <label for="bench-b-password">Contraseña</label>
+              <input id="bench-b-password" type="password" value="" autocomplete="off">
+              <label class="bench-span-2" for="bench-b-host">Portal IP</label>
+              <input class="bench-span-2" id="bench-b-host" type="text" placeholder="192.168.1.1 · vacío = DHCP" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="bench-cred-tools">
+              <label class="check"><input id="bench-b-show-password" type="checkbox"> Ver contraseña</label>
+              <button type="button" class="secondary" data-bench-save-portal="B">Guardar perfil</button>
+            </div>
+            <div class="mini-actions">
+              <button type="button" class="secondary" data-bench-remap="B" title="Asigna NIC y reconfigura DHCP">Remapear B</button>
+              <button type="button" data-bench-discover="B">1 · Buscar</button>
+              <button type="button" class="secondary" data-bench-reset="B">Reiniciar</button>
+              <button type="button" data-bench-cert="B">2 · Certificar</button>
+            </div>
+          </article>
+        </div>
+        <datalist id="portal-models">
+          {% for item in portals %}<option value="{{ item.model }}"></option>{% endfor %}
+        </datalist>
+        <details class="advanced portal-advanced">
+          <summary>Perfiles guardados y remapeo completo</summary>
+          <div class="lab-card" style="margin-top:0.5rem;">
+            <label for="portal-model">Modelo (referencia)</label>
+            <input id="portal-model" list="portal-models" value="{{ portal_model }}" autocomplete="off" spellcheck="false">
+            <button id="remap-lan-all" class="secondary" type="button">Remapear LAN1–LAN8 (toda la PC)</button>
+            <label for="portal-host">Dirección por defecto</label>
+            <input id="portal-host" type="text" value="{{ portal_host }}" autocomplete="off" spellcheck="false">
+            <button id="save-portal" class="secondary" type="button">Guardar perfil</button>
+            <button id="goto-portal-profiles" class="secondary" type="button">Tabla de perfiles (Ajustes)</button>
+            <label class="check"><input id="show-password" type="checkbox"> Mostrar contraseñas</label>
+          </div>
+        </details>
+        <div hidden>
+          <button id="path-ethernet" type="button"></button>
+          <button id="path-wifi" type="button"></button>
+          <strong id="found-name">Sin equipo</strong>
+          <span id="found-host"></span>
+          <strong id="summary-name">Sin equipo</strong>
+          <span id="summary-host">{{ portal_host }}</span>
+          <input id="dut-user" type="text" value="{{ portal_user }}">
+          <input id="dut-password" type="password" value="{{ portal_password }}">
+          <button id="discover" type="button"></button>
+          <button id="start-cert" type="button"></button>
+          <button id="scrape" type="button"></button>
+          <p id="detected-model" hidden></p>
+          <p id="identity-line"></p>
+        </div>
+        <div class="bench-readings">
+          <section>
+            <h3>Banco A — lectura del equipo</h3>
+            <div id="reading-bank-a" class="reading-grid"></div>
+          </section>
+          <section>
+            <h3>Banco B — lectura del equipo</h3>
+            <div id="reading-bank-b" class="reading-grid"></div>
+          </section>
+        </div>
+        <section id="portal-live" class="panel">
+          <div class="live-title">
+            <div>
+              <h3>Medición en vivo</h3>
+              <p class="note">Réplica en tiempo real. La vista principal está en el menú <strong>Medición en vivo</strong> (cronómetro y log).</p>
+              <p id="portal-live-detail" class="note">Sin medición activa. Usa «2 · Certificar» en el banco o «Throughput A+B»; al arrancar se abre la vista principal con cronómetro y log.</p>
+            </div>
+            <div class="clock-box">
+              <div>
+                <small>Tiempo de ventana</small>
+                <div id="portal-clock" class="clock clock-idle">—</div>
+                <div class="meter" aria-hidden="true"><span id="portal-meter"></span></div>
+              </div>
+            </div>
+          </div>
+          <p id="portal-story" class="note"></p>
+          <div class="live-banks">
+            <section class="live-bank-col">
+              <h3>Banco A · LAN1–LAN4</h3>
+              <div id="portal-cards-bank-a" class="cards"></div>
+            </section>
+            <section class="live-bank-col">
+              <h3>Banco B · LAN5–LAN8</h3>
+              <div id="portal-cards-bank-b" class="cards"></div>
+            </section>
+          </div>
+          <div class="run-actions">
+            <button id="portal-stop" class="stop" type="button" disabled>Detener</button>
+          </div>
+          <pre id="portal-log" hidden></pre>
+        </section>
+      </div>
+    </section>
+    <section class="module" id="module-settings" hidden>
+      <div class="panel">
+      <div class="ref-toolbar settings-subnav">
+        <div class="settings-subnav-tabs">
+          <button type="button" class="settings-pane-tab active" data-settings-pane="reference">Criterios de certificación</button>
+          <button type="button" class="settings-pane-tab" data-settings-pane="portals">Perfiles de portal</button>
+        </div>
+      </div>
+      <div id="settings-pane-reference">
+      <h2>Perfil de referencia</h2>
+      <p class="note">Cada tecnología pide su lectura y el criterio que el certificado imprime como esperado. La clave Wi-Fi se exige en la lectura y no se imprime. En EMTA 3.0 y 3.1 el criterio de bajada, subida y temperatura está en estas tarjetas.</p>
+      <input id="ref-name" type="hidden" value="{{ reference.name }}">
+      <div class="ref-tech">
+        <h3>ONT · GPON</h3>
+        <div class="ref-picks">
+          {% for item in (reference_catalog | default([])) if item.technology == "ONT" and item.model == item.name %}
+          <button class="ref-pick" type="button" data-ref="{{ item.name }}">{{ item.model }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="ref-tech">
+        <h3>EMTA · DOCSIS</h3>
+        <div class="ref-picks">
+          {% for item in (reference_catalog | default([])) if item.technology == "EMTA" and item.model == item.name %}
+          <button class="ref-pick" type="button" data-ref="{{ item.name }}">{{ item.model }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="ref-toolbar" id="ref-toolbar">
+        <div class="ref-toolbar-meta">
+          <strong>Perfil activo</strong>
+          <span id="ref-chosen">—</span>
+        </div>
+        <div class="ref-io run-actions">
+          <button id="export-reference" class="secondary" type="button">Exportar Excel</button>
+          <button id="import-reference-btn" class="secondary" type="button">Cargar desde Excel</button>
+          <input id="import-reference-file" type="file" accept=".csv,.txt" hidden>
+          <button id="save-reference" type="button">Guardar referencia</button>
+        </div>
+      </div>
+      <p id="reference-line" class="note ref-toolbar-note">CSV con punto y coma: una fila por parámetro de cada tarjeta. Edita y vuelve a cargar.</p>
+      <div id="ref-read-ont" class="ref-fields" hidden></div>
+      <div id="ref-read-emta" class="ref-fields" hidden></div>
+      <div id="ref-ont" class="ref-fields"></div>
+      <div id="ref-emta" class="ref-fields" hidden></div>
+      </div>
+      <div id="settings-pane-portals" hidden>
+        <h2>Perfiles de ingreso al portal</h2>
+        <p class="note">Un perfil por modelo comercial: usuario y contraseña para el scraper en «1 · Buscar». Exporta o carga un CSV con punto y coma (Excel).</p>
+        <form id="portal-profile-form" class="portal-settings-form" onsubmit="return false;">
+          <div>
+            <label for="settings-portal-brand">Marca</label>
+            <input id="settings-portal-brand" type="text" readonly value="—" title="Se infiere del modelo al guardar">
+          </div>
+          <div>
+            <label for="settings-portal-model">Modelo</label>
+            <input id="settings-portal-model" type="text" list="portal-models" placeholder="HG8145X6-10" autocomplete="off" spellcheck="false">
+          </div>
+          <div>
+            <label for="settings-portal-host">Portal IP</label>
+            <input id="settings-portal-host" type="text" value="192.168.1.1" autocomplete="off">
+          </div>
+          <div>
+            <label for="settings-portal-user">Usuario</label>
+            <input id="settings-portal-user" type="text" value="admin" autocomplete="off">
+          </div>
+          <div class="pw-field-col">
+            <label for="settings-portal-password">Contraseña</label>
+            <div class="pw-field-row">
+              <input id="settings-portal-password" type="password" autocomplete="off">
+              <label class="check" title="Mostrar u ocultar al escribir o editar">
+                <input id="settings-portal-show-password" type="checkbox"> Ver contraseña
+              </label>
+            </div>
+          </div>
+        </form>
+        <div class="portal-settings-actions run-actions">
+          <label style="display:flex;align-items:center;gap:0.35rem;margin:0;font-size:0.82rem;">
+            <input id="portal-profiles-show-password" type="checkbox">
+            Ver contraseñas en la tabla
+          </label>
+          <button id="portal-profile-save" type="button">Guardar perfil</button>
+          <button id="portal-profile-new" class="secondary" type="button">Nuevo perfil</button>
+          <button id="export-portals" class="secondary" type="button">Exportar Excel</button>
+          <button id="import-portals-btn" class="secondary" type="button">Cargar desde Excel</button>
+          <input id="import-portals-file" type="file" accept=".csv,.txt" hidden>
+          <button id="open-settings-portals-from-ont" class="secondary" type="button" hidden>Administrar perfiles</button>
+        </div>
+        <p id="portal-profiles-line" class="note ref-toolbar-note">Columnas: marca;modelo;host;usuario;contraseña;tipo</p>
+        <table id="portal-profiles-table">
+          <thead>
+            <tr>
+              <th>Marca</th>
+              <th>Modelo</th>
+              <th>Usuario</th>
+              <th>Contraseña</th>
+              <th>Portal IP</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      </div>
+    </section>
+    <section class="module" id="module-history" hidden>
+      <div class="panel">
+      <h2>Corridas</h2>
+      <p class="note">Cada banco tiene su propia orden TC según el SN del equipo (Buscar en A y en B). Corrida A+B: dos órdenes, dos series; el certificado de cada banco usa su TC. «N mediciones» agrupa reintentos del mismo SN y banco.</p>
+      <div class="history-tools">
+        <div>
+          <label for="sn-search">Buscar por SN</label>
+          <input id="sn-search" type="text" placeholder="HWTC… o 48575443…" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="pager">
+          <button id="load-runs" type="button">Cargar datos</button>
+          <button id="sync-supabase" type="button">Enviar no enviadas</button>
+          <button id="history-prev" type="button">Anterior</button>
+          <span id="history-page">1 / 1</span>
+          <button id="history-next" type="button">Siguiente</button>
+        </div>
+      </div>
+      <table id="history-table">
+        <thead><tr>
+          <th><button type="button" class="col-filter" data-col="run_id">Orden</button></th>
+          <th><button type="button" class="col-filter" data-col="bench_label">Banco</button></th>
+          <th><button type="button" class="col-filter" data-col="serial">SN</button></th>
+          <th><button type="button" class="col-filter" data-col="mac">MAC</button></th>
+          <th><button type="button" class="col-filter" data-col="brand">Marca</button></th>
+          <th><button type="button" class="col-filter" data-col="model">Modelo</button></th>
+          <th><button type="button" class="col-filter" data-col="technology">Tecnología</button></th>
+          <th><button type="button" class="col-filter" data-col="verdict">Resultado</button></th>
+          <th><button type="button" class="col-filter" data-col="started_at">Inicio</button></th>
+          <th><button type="button" class="col-filter" data-col="stored">Base de datos</button></th>
+        </tr></thead>
+        <tbody>
+          {% for run in runs %}
+          <tr data-sn="{{ run.search }}" data-run="{{ run.run_id }}">
+            <td><a href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">{{ run.run_id }}</a> <a class="pdf-btn" href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">PDF</a></td>
+            <td>{{ run.bench_label or "—" }}</td>
+            <td>{{ run.serial or "—" }}</td>
+            <td>{{ run.mac or "—" }}</td>
+            <td>{{ run.brand or "—" }}</td>
+            <td>{{ run.model or "—" }}</td>
+            <td>{{ run.technology or "—" }}</td>
+            <td><span class="verdict verdict-{{ run.verdict|replace(' ', '-') }}">{{ run.verdict }}</span></td>
+            <td>{{ run.started_at or "—" }}</td>
+            <td>
+              {% if run.stored is defined and run.stored %}
+              <span class="stored-yes">Enviada</span>
+              {% elif run.stored is defined and run.stored == false %}
+              <span class="stored-no">No enviada</span>
+              {% else %}
+              —
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p id="history-empty" class="note" hidden>Ninguna orden coincide con el filtro.</p>
+      <script type="application/json" id="history-data">{{ runs | tojson }}</script>
+      <p id="sync-line" class="note"></p>
+      </div>
+    </section>
+    </main>
+  </div>
+  <div id="cert-time" class="time-dialog" hidden>
+    <div class="time-card" role="dialog" aria-labelledby="cert-time-title">
+      <h3 id="cert-time-title">Duración del throughput</h3>
+      <p class="note">Elige cuánto dura cada ventana de la prueba LAN. Después arranca la certificación.</p>
+      <div id="cert-times" class="time-list"></div>
+      <div class="run-actions">
+        <button id="cert-time-go" type="button">Iniciar con este tiempo</button>
+        <button id="cert-time-cancel" type="button">Cancelar</button>
+      </div>
+    </div>
+  </div>
+  <script>
+    const token = document.querySelector('meta[name="tc-token"]').content;
+    const profilesMetaInitial = {{ profiles_meta | tojson }};
+
+    function paintProfilesMeta(meta) {
+      const pill = document.getElementById("profiles-sync-pill");
+      if (!pill || !meta) return;
+      const count = Number(meta.count || 0);
+      const when = meta.synced_at ? String(meta.synced_at).replace("T", " ").slice(0, 19) : "sin fecha";
+      pill.textContent = count + " reglas";
+      pill.title = "Caché: " + (meta.cache_path || "") + " · " + when + " · " + (meta.source || "");
+    }
+
+    function paintUpdateOffer(payload) {
+      const node = document.getElementById("update-pill");
+      const applyBtn = document.getElementById("btn-apply-update");
+      if (!node || !payload) return;
+      if (payload.update_pending) {
+        const label = payload.update_version ? "Nueva " + payload.update_version : "Actualización pendiente";
+        node.textContent = label;
+        node.hidden = false;
+        node.classList.add("pending");
+        if (applyBtn) {
+          applyBtn.hidden = false;
+          applyBtn.textContent = payload.update_mandatory ? "Actualizar (obligatorio)" : "Actualizar software";
+        }
+      } else {
+        node.hidden = true;
+        node.classList.remove("pending");
+        if (applyBtn) applyBtn.hidden = true;
+      }
+    }
+
+    async function checkSoftwareUpdate() {
+      const btn = document.getElementById("btn-check-update");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch("/api/system/update/check", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token}),
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          paintUpdateOffer(data);
+          if (!data.update_pending) {
+            window.alert("Versión actual (" + (data.app_version || "") + "). No hay release más nuevo en Supabase.");
+          }
+        } else {
+          window.alert((data && data.error) || "No se pudo consultar Supabase.");
+        }
+        await refreshSystemStatus();
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    async function applySoftwareUpdate() {
+      const applyBtn = document.getElementById("btn-apply-update");
+      if (!window.confirm("Se descargará e instalará el paquete publicado. El panel se reiniciará. ¿Continuar?")) return;
+      if (applyBtn) applyBtn.disabled = true;
+      try {
+        const res = await fetch("/api/system/update", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token}),
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          window.alert(data.message || "Actualización iniciada. Espere unos segundos y recargue la página.");
+          setTimeout(() => location.reload(), 8000);
+        } else {
+          window.alert((data && data.error) || "No se pudo aplicar la actualización.");
+        }
+      } finally {
+        if (applyBtn) applyBtn.disabled = false;
+      }
+    }
+
+    async function refreshSystemStatus() {
+      try {
+        const res = await fetch("/api/system/status");
+        const data = await res.json();
+        if (data && data.profiles) paintProfilesMeta(data.profiles);
+        paintUpdateOffer(data);
+      } catch (_err) {
+        /* panel local only */
+      }
+    }
+
+    async function syncRemoteProfiles() {
+      const btn = document.getElementById("btn-sync-profiles");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch("/api/profiles/sync", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token}),
+        });
+        const data = await res.json();
+        if (data && data.ok) {
+          paintProfilesMeta({count: data.count, synced_at: data.synced_at, source: data.source, cache_path: (profilesMetaInitial && profilesMetaInitial.cache_path) || ""});
+        } else {
+          window.alert((data && data.error) || "No se pudieron sincronizar las reglas.");
+        }
+        await refreshSystemStatus();
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    paintProfilesMeta(profilesMetaInitial);
+    document.getElementById("btn-sync-profiles")?.addEventListener("click", () => syncRemoteProfiles());
+    document.getElementById("btn-check-update")?.addEventListener("click", () => checkSoftwareUpdate());
+    document.getElementById("btn-apply-update")?.addEventListener("click", () => applySoftwareUpdate());
+    refreshSystemStatus();
+    const stationPortCount = {{ port_count | tojson }};
+    const panelPrivileged = {{ job.privileged | tojson }};
+    const portals = {{ portals | tojson }};
+    let portalRows = {{ portal_rows | tojson }};
+    const stage = document.getElementById("stage");
+    const duration = document.getElementById("duration");
+    const button = document.getElementById("run");
+    const stop = document.getElementById("stop");
+    const banner = document.getElementById("banner");
+    const feedback = document.getElementById("feedback");
+    const portalFeedback = document.getElementById("portal-feedback");
+    function showLiveModule() {
+      document.querySelector('.nav-item[data-tab="live"]')?.click();
+    }
+
+    function setPortalFeedback(text) {
+      if (portalFeedback) portalFeedback.textContent = text;
+    }
+
+    function preflightErrorFromLog(logText) {
+      if (!logText) return "";
+      for (const line of String(logText).split("\n")) {
+        if (line.includes("PREFLIGHT FAIL")) {
+          return line.replace(/^.*PREFLIGHT FAIL\s*/i, "").trim();
+        }
+      }
+      return "";
+    }
+
+    function showPreflightAbort(job) {
+      const pf = preflightErrorFromLog(job && job.log);
+      if (!pf) return false;
+      let msg = "La certificación se detuvo al instante: " + pf + ".";
+      if (/management-protection/i.test(pf)) {
+        msg += " Pulsa Recuperar namespaces (arriba), espera 5 s y vuelve a 2 · Certificar.";
+      }
+      setPortalFeedback(msg);
+      feedback.textContent = msg;
+      document.querySelector('.nav-item[data-tab="live"]')?.click();
+      if (log) {
+        log.hidden = false;
+        log.scrollIntoView({behavior: "smooth", block: "nearest"});
+      }
+      return true;
+    }
+    const STALE_PANEL = "La página expiró. Recarga el panel.";
+    const _fetch = window.fetch.bind(window);
+    window.fetch = async function (input, init) {
+      const response = await _fetch(input, init);
+      const url = typeof input === "string" ? input : (input && input.url) || "";
+      if (url.includes("/api/") && init && init.method && init.method.toUpperCase() !== "GET") {
+        try {
+          const probe = await response.clone().json();
+          if (probe && probe.error === STALE_PANEL) {
+            setPortalFeedback(STALE_PANEL + " Recargando…");
+            location.reload();
+          }
+        } catch (_err) {
+          /* ignore */
+        }
+      }
+      return response;
+    };
+    const log = document.getElementById("log");
+    const logDownload = document.getElementById("log-download");
+    const clock = document.getElementById("clock");
+    const detail = document.getElementById("live-detail");
+    const meter = document.getElementById("meter");
+    function benchForPort(port) {
+      const match = String(port || "").match(/^LAN(\d+)$/i);
+      if (!match) return "A";
+      return Number(match[1]) >= 5 ? "B" : "A";
+    }
+
+    function lanCardTarget(benchId, kind) {
+      const suffix = benchId === "B" ? "b" : "a";
+      if (kind === "portal") return document.getElementById("portal-cards-bank-" + suffix);
+      return document.getElementById("cards-bank-" + suffix);
+    }
+
+    function appendLanCard(parent, row) {
+      if (!parent) return;
+      const card = document.createElement("article");
+      card.className = "lan-card";
+      const head = document.createElement("div");
+      head.className = "lan-head";
+      const title = document.createElement("h3");
+      const led = document.createElement("span");
+      led.className = row.led === "on" ? "led on" : (row.alarm ? "led fail" : "led");
+      title.appendChild(led);
+      const activity = row.state === "SIN_NIC" ? "Sin adaptador PC" : (row.state || row.result || "");
+      title.appendChild(document.createTextNode(row.port + " · " + activity));
+      const badge = document.createElement("span");
+      const result = String(row.result || "");
+      badge.className = "badge" + (result === "PASS" ? " pass" : (result === "FAIL" ? " fail" : ""));
+      badge.textContent = result || "—";
+      head.appendChild(title);
+      head.appendChild(badge);
+      card.appendChild(head);
+      const body = document.createElement("div");
+      body.className = "body";
+      const now = document.createElement("p");
+      now.className = "note now";
+      now.textContent = "Enlace ahora: " + (row.now_link || "WAITING") + " · " + (row.now_speed || "N/A");
+      body.appendChild(now);
+      const bench = benchForPort(row.port);
+      if (row.state === "SIN_NIC") {
+        const hint = document.createElement("p");
+        hint.className = "note";
+        hint.textContent = "Asigna este puerto en Módulo ONT con Remapear LAN " + bench + ".";
+        body.appendChild(hint);
+        const go = document.createElement("button");
+        go.type = "button";
+        go.textContent = "Reconfigurar LAN " + bench;
+        go.addEventListener("click", () => {
+          document.querySelector('.nav button[data-module="portal"]')?.click();
+          const remap = document.querySelector('[data-bench-remap="' + bench + '"]');
+          if (remap) remap.scrollIntoView({behavior: "smooth", block: "center"});
+          setPortalFeedback("Pulsa Remapear LAN " + bench + " en la tarjeta del banco (pide contraseña de admin).");
+        });
+        body.appendChild(go);
+      } else {
+        const refresh = document.createElement("button");
+        refresh.type = "button";
+        refresh.textContent = "Refrescar enlace";
+        refresh.addEventListener("click", () => refreshPort(row.port, refresh));
+        body.appendChild(refresh);
+      }
+      const list = document.createElement("dl");
+      const pairs = [
+        ["Interfaz", row.iface],
+        ["Link", row.link],
+        ["Velocidad", row.speed],
+        ["Dúplex", row.duplex],
+        ["DHCP", row.dhcp],
+        ["IP", row.ip],
+        ["Estado", row.state],
+        ["Progreso", row.progress],
+        ["TX", row.tx],
+        ["RX", row.rx],
+        ["iperf3", row.iperf],
+        ["Motivo", row.reason || "—"],
+        ["Resultado", row.result],
+      ];
+      for (const [label, value] of pairs) {
+        for (const node of field(label, value)) list.appendChild(node);
+      }
+      body.appendChild(list);
+      card.appendChild(body);
+      parent.appendChild(card);
+    }
+
+    function clearLiveBankCards() {
+      for (const id of ["cards-bank-a", "cards-bank-b", "portal-cards-bank-a", "portal-cards-bank-b"]) {
+        const node = document.getElementById(id);
+        if (node) node.replaceChildren();
+      }
+    }
+    const wifiLine = document.getElementById("wifi-line");
+    const wifiOff = document.getElementById("wifi-off");
+    const wifiOn = document.getElementById("wifi-on");
+    const story = document.getElementById("story");
+    const timed = new Set(["all", "throughput", "simultaneous", "bidirectional", "wifi"]);
+    let latest = {{ job.latest_run_id | tojson }};
+    const serverPanelBoot = {{ job.panel_boot | default('') | tojson }};
+    let anchor = null;
+    let appliedModel = "";
+    let jobWasRunning = false;
+    /** Activo mientras corre una certificación de los 8 LAN (ambos bancos). */
+    let dualCertQueue = null;
+
+    logDownload.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.href = "/api/log";
+      link.download = "techcorp-lab-log.txt";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+
+    function formatClock(seconds) {
+      const whole = Math.max(0, Math.ceil(seconds));
+      const minutes = Math.floor(whole / 60);
+      const rest = whole % 60;
+      return String(minutes).padStart(2, "0") + ":" + String(rest).padStart(2, "0");
+    }
+
+    function field(label, value) {
+      const dt = document.createElement("dt");
+      dt.textContent = label;
+      const dd = document.createElement("dd");
+      dd.textContent = value || "N/A";
+      return [dt, dd];
+    }
+
+    function paintLive(job) {
+      const live = job.live || {};
+      const portalClock = document.getElementById("portal-clock");
+      const portalMeter = document.getElementById("portal-meter");
+      const portalDetail = document.getElementById("portal-live-detail");
+      const portalStory = document.getElementById("portal-story");
+      const portalCards = null;
+      const portalLog = document.getElementById("portal-log");
+      const portalStop = document.getElementById("portal-stop");
+      const wifiDetail = document.getElementById("wifi-live-detail");
+      const wifiStory = document.getElementById("wifi-story");
+      const wifiCards = document.getElementById("wifi-cards");
+      const wifiLog = document.getElementById("wifi-log");
+      const wifiStop = document.getElementById("wifi-stop");
+      const wifiClock = document.getElementById("wifi-clock");
+      const wifiMeter = document.getElementById("wifi-meter");
+      if (live.measuring && live.remaining !== null && live.remaining !== undefined) {
+        anchor = {remaining: live.remaining, duration: live.duration || live.remaining, at: performance.now()};
+        clock.classList.remove("clock-idle");
+        if (portalClock) portalClock.classList.remove("clock-idle");
+        if (wifiClock) wifiClock.classList.remove("clock-idle");
+        const flow = live.flow ? live.flow + ". " : "";
+        const line = flow + live.phase + " Clientes iperf3: " + live.clients + ".";
+        detail.textContent = line;
+        if (portalDetail) portalDetail.textContent = line;
+        if (wifiDetail) wifiDetail.textContent = line;
+      } else {
+        anchor = null;
+        clock.classList.add("clock-idle");
+        if (portalClock) portalClock.classList.add("clock-idle");
+        if (wifiClock) wifiClock.classList.add("clock-idle");
+        const idle = job.running && live.duration ? formatClock(live.duration) : "—";
+        clock.textContent = idle;
+        if (portalClock) portalClock.textContent = idle;
+        if (wifiClock) wifiClock.textContent = idle;
+        meter.style.width = "0%";
+        if (portalMeter) portalMeter.style.width = "0%";
+        if (wifiMeter) wifiMeter.style.width = "0%";
+        detail.textContent = live.phase || "Sin medición.";
+        if (portalDetail) {
+          portalDetail.textContent = live.phase || (
+            job.running
+              ? "Preparando namespaces y DHCP…"
+              : "Sin medición. Las fichas muestran el enlace en el host; durante la corrida siguen el log."
+          );
+        }
+        if (wifiDetail) wifiDetail.textContent = live.phase || (job.running ? "Preparando la medición." : "Sin medición. Arranca al pulsar Probar Wi-Fi 5 y 2.4.");
+      }
+      const detailCard = live.detail || {};
+      story.textContent = detailCard.headline || "";
+      if (portalStory) portalStory.textContent = detailCard.headline || "";
+      if (wifiStory) wifiStory.textContent = detailCard.headline || "";
+      if (portalStop) portalStop.disabled = !job.running;
+      if (wifiStop) wifiStop.disabled = !job.running;
+      if (portalLog) {
+        portalLog.hidden = !(job.running && job.log);
+        portalLog.textContent = job.log || "";
+      }
+      if (wifiLog) {
+        wifiLog.hidden = !job.log;
+        wifiLog.textContent = job.log || "";
+      }
+      clearLiveBankCards();
+      if (wifiCards) wifiCards.replaceChildren();
+      for (const row of live.cards || []) {
+        const bench = benchForPort(row.port);
+        appendLanCard(lanCardTarget(bench, "live"), row);
+        appendLanCard(lanCardTarget(bench, "portal"), row);
+      }
+      const linkBadge = document.getElementById("link-badge");
+      const pendingNote = document.getElementById("bench-pending-note");
+      if (pendingNote) {
+        pendingNote.hidden = !job.dual_bench_pending;
+      }
+      const dualNote = document.getElementById("dual-queue-note");
+      if (dualNote) {
+        dualNote.hidden = !(dualCertQueue && dualCertQueue.active);
+      }
+      if (linkBadge) linkBadge.textContent = job.running ? "Medición en curso" : "Sin medición";
+      const wifi = live.wifi || {};
+      if (wifi.iface) {
+        const address = wifi.ip ? " · " + wifi.ip : "";
+        wifiLine.textContent = wifi.iface + address + " · " + (wifi.state || "OFF") + " · radio de la estación";
+      } else {
+        wifiLine.textContent = "No hay interfaz Wi-Fi visible.";
+      }
+    }
+
+    async function refreshPort(port, button) {
+      button.disabled = true;
+      const response = await fetch("/api/link", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token, port})
+      });
+      const job = await response.json();
+      const reading = job.link || {};
+      feedback.textContent = job.ok
+        ? (port + " ahora: " + (reading.now_link || "WAITING") + " · " + (reading.now_iface || "—") + " · " + (reading.now_speed || "N/A") + " · " + (reading.now_ip || "N/A"))
+        : (job.error || "No se pudo leer el enlace");
+      paint(job);
+      button.disabled = false;
+    }
+
+    async function wifiAction(action) {
+      wifiOff.disabled = true;
+      wifiOn.disabled = true;
+      const response = await fetch("/api/wifi", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token, action})
+      });
+      const job = await response.json();
+      feedback.textContent = job.ok ? "Wi-Fi actualizado." : (job.error || "No se pudo cambiar el Wi-Fi.");
+      paint(job);
+      wifiOff.disabled = false;
+      wifiOn.disabled = false;
+    }
+    wifiOff.addEventListener("click", () => wifiAction("off"));
+    wifiOn.addEventListener("click", () => wifiAction("on"));
+
+    function tick() {
+      if (!anchor) return;
+      const left = Math.max(0, anchor.remaining - (performance.now() - anchor.at) / 1000);
+      const text = formatClock(left);
+      const span = anchor.duration > 0 ? Math.min(100, ((anchor.duration - left) / anchor.duration) * 100) : 0;
+      [clock, document.getElementById("portal-clock"), document.getElementById("wifi-clock")].forEach((node) => { if (node) node.textContent = text; });
+      [meter, document.getElementById("portal-meter"), document.getElementById("wifi-meter")].forEach((node) => { if (node) node.style.width = span + "%"; });
+    }
+
+    function durationState() {
+      const usesTime = timed.has(stage.value);
+      duration.disabled = !usesTime;
+    }
+    stage.addEventListener("change", durationState);
+    durationState();
+
+    let portalFromDiscovery = {{ "true" if dut_type == "emta" else "false" }};
+
+    function applyDetectedModel(model) {
+      if (!model || appliedModel === model) return;
+      appliedModel = model;
+      const input = document.getElementById("portal-model");
+      const note = document.getElementById("detected-model");
+      note.hidden = false;
+      note.textContent = "Equipo detectado: " + model;
+      document.getElementById("sidebar-device-name").textContent = model;
+      if (input.value !== model) {
+        input.value = model;
+        const saved = portals.find((item) => item.model === model);
+        if (!saved) document.getElementById("dut-password").value = "";
+        input.dispatchEvent(new Event("change"));
+      }
+    }
+
+    function ensurePanelBoot(job) {
+      const boot = String((job && job.panel_boot) || serverPanelBoot || "");
+      if (!boot) return;
+      const prev = sessionStorage.getItem("tc-panel-boot");
+      if (prev === boot) return;
+      sessionStorage.setItem("tc-panel-boot", boot);
+      sessionStorage.removeItem("tc-bench-inventories");
+      clearBenchReadingUi("");
+      suppressBenchReadingsPoll = true;
+    }
+
+    function paint(job) {
+      ensurePanelBoot(job);
+      button.disabled = Boolean(job.running) || !job.can_launch;
+      for (const id of ["wifi-run-a", "wifi-run-b"]) {
+        const wifiBtn = document.getElementById(id);
+        if (wifiBtn) wifiBtn.disabled = button.disabled;
+      }
+      stop.disabled = !job.running;
+      const recoverBtn = document.getElementById("recover-ns");
+      if (recoverBtn) recoverBtn.disabled = Boolean(job.running);
+      document.getElementById("scrape").disabled = Boolean(job.running);
+      document.getElementById("discover").disabled = Boolean(job.running);
+      const dualCertBtn = document.getElementById("certify-benches-both");
+      if (dualCertBtn) dualCertBtn.disabled = button.disabled;
+      document.querySelectorAll("[data-bench-cert]").forEach((node) => {
+        const benchId = node.getAttribute("data-bench-cert") || "A";
+        node.disabled = button.disabled || technologyBlockedForBench(benchId);
+      });
+      applyTechnologyLock(Boolean(job.running));
+      if (job.running) portalFromDiscovery = false;
+      if (!portalFromDiscovery && job.running) {
+        const marks = [...(job.log || "").matchAll(/MODEL=([A-Za-z0-9][A-Za-z0-9._-]{0,39})/g)];
+        if (marks.length) applyDetectedModel(marks[marks.length - 1][1]);
+      }
+      banner.hidden = !job.running && !job.message;
+      banner.textContent = job.message || "";
+      if (job.log) {
+        log.hidden = false;
+        log.textContent = job.log;
+        logDownload.hidden = false;
+      }
+      if (!job.running && job.log && job.log.includes("PREFLIGHT FAIL") && job.log.includes("FINAL RESULT: FAIL")) {
+        showPreflightAbort(job);
+      }
+      paintLive(job);
+      if (!job.running && (feedback.textContent === "Prueba iniciada." || feedback.textContent === "Iniciando…")) {
+        feedback.textContent = job.message || "La prueba no quedó en curso.";
+      }
+      if (jobWasRunning && !job.running) {
+        pushUnsentRuns(true).catch(() => {});
+        finishCertBenchCleanup(job);
+        suppressBenchIdentitiesPoll = true;
+        dualCertQueue = null;
+      }
+      jobWasRunning = Boolean(job.running);
+      if (job.bench_identities && !job.running) {
+        if (suppressBenchIdentitiesPoll) {
+          suppressBenchIdentitiesPoll = false;
+        } else {
+          if (job.bench_identities.A) benchIdentities.A = job.bench_identities.A;
+          if (job.bench_identities.B) benchIdentities.B = job.bench_identities.B;
+          paintBenchIdentities(job.bench_identities);
+        }
+      }
+      if (!job.running) {
+        if (suppressBenchReadingsPoll) {
+          suppressBenchReadingsPoll = false;
+        } else if (job.bench_readings) {
+          applyBenchReadings(job.bench_readings);
+        } else {
+          for (const benchId of ["A", "B"]) {
+            if (hasFullInventory(benchInventories[benchId])) {
+              paintReadingBench(benchId, benchInventories[benchId]);
+            }
+          }
+        }
+      }
+      if (!job.running && job.latest_run_id && job.latest_run_id !== latest) {
+        finishCertBenchCleanup(job);
+        location.assign("/run/" + job.latest_run_id);
+      }
+    }
+
+    const snSearch = document.getElementById("sn-search");
+    const historyPage = document.getElementById("history-page");
+    const historyPrev = document.getElementById("history-prev");
+    const historyNext = document.getElementById("history-next");
+    const historyEmpty = document.getElementById("history-empty");
+    const pageSize = 10;
+    const filterColumns = ["run_id", "bench_label", "serial", "mac", "brand", "model", "technology", "verdict", "started_at", "stored"];
+    let historyRecords = [];
+    let historyPageIndex = 0;
+    const columnFilters = {};
+    const expandedGroups = new Set();
+    let filterMenu = null;
+
+    function cellValue(run, col) {
+      if (col === "stored") {
+        if (run.stored === true) return "Enviada";
+        if (run.stored === false) return "No enviada";
+        return "—";
+      }
+      const value = run[col];
+      return value ? String(value) : "—";
+    }
+
+    function groupKey(run) {
+      const serial = String(run.serial || "").trim();
+      const bench = String(run.bench_scope || run.bench_label || "").trim().toLowerCase();
+      if (!serial) return "run:" + String(run.run_id || "") + "|" + bench;
+      return "sn:" + String(run.search || serial).toLowerCase() + "|" + bench;
+    }
+
+    function groups() {
+      const buckets = new Map();
+      historyRecords.forEach((run) => {
+        const key = groupKey(run);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push(run);
+      });
+      return [...buckets.values()];
+    }
+
+    function memberMatches(run) {
+      const query = snSearch.value.trim().toLowerCase();
+      if (query) {
+        const haystack = [run.search, run.serial, run.run_id, run.bench_label, run.mac, run.brand, run.model].join(" ").toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
+      return filterColumns.every((col) => {
+        const allowed = columnFilters[col];
+        return !allowed || allowed.has(cellValue(run, col));
+      });
+    }
+
+    function matchingGroups() {
+      return groups().filter((members) => members.some(memberMatches));
+    }
+
+    function historyText(value) {
+      const cell = document.createElement("td");
+      cell.textContent = value || "—";
+      return cell;
+    }
+
+    function storedCell(run) {
+      const stored = document.createElement("td");
+      if (run.stored === true) {
+        const mark = document.createElement("span");
+        mark.className = "stored-yes";
+        mark.textContent = "Enviada";
+        stored.append(mark);
+      } else if (run.stored === false) {
+        const mark = document.createElement("span");
+        mark.className = "stored-no";
+        mark.textContent = "No enviada";
+        stored.append(mark);
+      } else {
+        stored.textContent = "—";
+      }
+      return stored;
+    }
+
+    function certQuery(run) {
+      const runId = String(run.run_id || "");
+      const measurement = String(run.measurement || "").trim();
+      const suffix = measurement ? "?m=" + encodeURIComponent(measurement) : "";
+      return {runId, suffix};
+    }
+
+    function runRow(run, members) {
+      const row = document.createElement("tr");
+      const runId = String(run.run_id || "");
+      row.dataset.sn = run.search || "";
+      row.dataset.run = runId + (run.started_at || "");
+      const order = document.createElement("td");
+      const {suffix} = certQuery(run);
+      const link = document.createElement("a");
+      link.href = "/cert/" + encodeURIComponent(runId) + suffix;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = runId;
+      const pdf = document.createElement("a");
+      pdf.className = "pdf-btn";
+      pdf.href = "/pdf/" + encodeURIComponent(runId) + suffix;
+      pdf.target = "_blank";
+      pdf.rel = "noopener";
+      pdf.textContent = "PDF";
+      order.append(link, document.createTextNode(" "), pdf);
+      if (run.archived) {
+        const tag = document.createElement("span");
+        tag.className = "group-count";
+        tag.textContent = "anterior";
+        order.append(tag);
+      }
+      if (members && members.length > 1) {
+        const key = groupKey(run);
+        const count = document.createElement("button");
+        count.type = "button";
+        count.className = "group-count";
+        const open = expandedGroups.has(key);
+        count.textContent = (open ? "Ocultar " : "") + members.length + " mediciones";
+        count.addEventListener("click", () => {
+          if (expandedGroups.has(key)) expandedGroups.delete(key);
+          else expandedGroups.add(key);
+          paintHistory();
+        });
+        order.append(count);
+      }
+      const verdict = document.createElement("td");
+      const badge = document.createElement("span");
+      const label = run.verdict || "EN CURSO";
+      badge.className = "verdict verdict-" + String(label).replace(/ /g, "-");
+      badge.textContent = label;
+      verdict.append(badge);
+      row.append(
+        order,
+        historyText(run.bench_label),
+        historyText(run.serial),
+        historyText(run.mac),
+        historyText(run.brand),
+        historyText(run.model),
+        historyText(run.technology),
+        verdict,
+        historyText(run.started_at),
+        storedCell(run)
+      );
+      return row;
+    }
+
+    function paintHistory() {
+      const matched = matchingGroups();
+      const pages = Math.max(1, Math.ceil(matched.length / pageSize));
+      historyPageIndex = Math.min(Math.max(historyPageIndex, 0), pages - 1);
+      const body = document.querySelector("#history-table tbody");
+      body.replaceChildren();
+      matched.slice(historyPageIndex * pageSize, (historyPageIndex + 1) * pageSize).forEach((members) => {
+        body.append(runRow(members[0], members));
+        const key = groupKey(members[0]);
+        if (members.length > 1 && expandedGroups.has(key)) {
+          members.slice(1).forEach((run) => {
+            const row = runRow(run, null);
+            row.classList.add("history-child");
+            body.append(row);
+          });
+        }
+      });
+      historyEmpty.hidden = matched.length !== 0;
+      historyPage.textContent = matched.length ? (historyPageIndex + 1) + " / " + pages : "0 / 0";
+      historyPrev.disabled = historyPageIndex === 0 || matched.length === 0;
+      historyNext.disabled = historyPageIndex >= pages - 1 || matched.length === 0;
+      document.querySelectorAll(".col-filter").forEach((button) => {
+        button.classList.toggle("filtering", Boolean(columnFilters[button.dataset.col]));
+      });
+    }
+
+    function closeFilter() {
+      if (filterMenu) filterMenu.remove();
+      filterMenu = null;
+    }
+
+    function openFilter(button, col) {
+      closeFilter();
+      const values = [...new Set(historyRecords.map((run) => cellValue(run, col)))].sort((a, b) => a.localeCompare(b, "es"));
+      const selected = new Set(columnFilters[col] || values);
+      const menu = document.createElement("div");
+      menu.className = "filter-menu";
+      menu.dataset.col = col;
+      const search = document.createElement("input");
+      search.type = "search";
+      search.placeholder = "Buscar en la columna";
+      const choices = document.createElement("div");
+      choices.className = "choices";
+      function paintChoices() {
+        const query = search.value.trim().toLowerCase();
+        choices.replaceChildren();
+        values.filter((value) => !query || value.toLowerCase().includes(query)).forEach((value) => {
+          const label = document.createElement("label");
+          const box = document.createElement("input");
+          box.type = "checkbox";
+          box.checked = selected.has(value);
+          box.addEventListener("change", () => {
+            if (box.checked) selected.add(value);
+            else selected.delete(value);
+          });
+          const text = document.createElement("span");
+          text.textContent = value;
+          label.append(box, text);
+          choices.append(label);
+        });
+      }
+      search.addEventListener("input", paintChoices);
+      paintChoices();
+      const actions = document.createElement("div");
+      actions.className = "filter-actions";
+      const all = document.createElement("button");
+      all.type = "button";
+      all.textContent = "Todos";
+      all.addEventListener("click", (event) => {
+        event.stopPropagation();
+        values.forEach((value) => selected.add(value));
+        paintChoices();
+      });
+      const apply = document.createElement("button");
+      apply.type = "button";
+      apply.textContent = "Aplicar";
+      apply.addEventListener("click", (event) => {
+        event.stopPropagation();
+        if (selected.size === values.length) delete columnFilters[col];
+        else columnFilters[col] = new Set(selected);
+        historyPageIndex = 0;
+        closeFilter();
+        paintHistory();
+      });
+      const clear = document.createElement("button");
+      clear.type = "button";
+      clear.textContent = "Quitar";
+      clear.addEventListener("click", (event) => {
+        event.stopPropagation();
+        delete columnFilters[col];
+        historyPageIndex = 0;
+        closeFilter();
+        paintHistory();
+      });
+      actions.append(all, apply, clear);
+      menu.append(search, choices, actions);
+      menu.addEventListener("click", (event) => event.stopPropagation());
+      document.body.append(menu);
+      const rect = button.getBoundingClientRect();
+      menu.style.top = (rect.bottom + window.scrollY + 4) + "px";
+      menu.style.left = Math.max(8, Math.min(rect.left + window.scrollX, window.scrollX + document.documentElement.clientWidth - 280)) + "px";
+      filterMenu = menu;
+      search.focus();
+    }
+
+    document.querySelectorAll(".col-filter").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const col = button.dataset.col;
+        if (filterMenu && filterMenu.dataset.col === col) closeFilter();
+        else openFilter(button, col);
+      });
+    });
+    document.addEventListener("click", () => closeFilter());
+
+    snSearch.addEventListener("input", () => {
+      historyPageIndex = 0;
+      paintHistory();
+    });
+    historyPrev.addEventListener("click", () => {
+      historyPageIndex = Math.max(0, historyPageIndex - 1);
+      paintHistory();
+    });
+    historyNext.addEventListener("click", () => {
+      historyPageIndex += 1;
+      paintHistory();
+    });
+
+    function renderRuns(runs) {
+      historyRecords = runs || [];
+      historyPageIndex = 0;
+      paintHistory();
+    }
+
+    try {
+      renderRuns(JSON.parse(document.getElementById("history-data").textContent || "[]"));
+    } catch (error) {
+      renderRuns([]);
+    }
+
+    document.getElementById("load-runs").addEventListener("click", async () => {
+      const load = document.getElementById("load-runs");
+      const line = document.getElementById("sync-line");
+      load.disabled = true;
+      line.textContent = "Cargando corridas…";
+      try {
+        const response = await fetch("/api/runs");
+        const payload = await response.json();
+        if (!payload.ok) {
+          line.textContent = payload.error || "No se pudieron cargar las corridas.";
+        } else {
+          renderRuns(payload.runs || []);
+          const count = (payload.runs || []).length;
+          const orders = groups().length;
+          line.textContent = count ? "Cargadas " + count + " mediciones en " + orders + " órdenes." : "No hay corridas.";
+        }
+      } catch (error) {
+        line.textContent = "No se pudieron cargar las corridas.";
+      }
+      load.disabled = false;
+    });
+
+    async function pushUnsentRuns(quiet) {
+      const line = document.getElementById("sync-line");
+      if (!quiet) line.textContent = "Enviando las corridas no enviadas…";
+      const response = await fetch("/api/sync", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token})
+      });
+      const saved = await response.json();
+      (saved.sent || []).forEach((id) => {
+        const cell = document.querySelector('#history-table tr[data-run="' + id + '"] td:last-child');
+        if (cell) cell.innerHTML = '<span class="stored-yes">Enviada</span>';
+      });
+      const count = (saved.sent || []).length;
+      if (saved.error) line.textContent = count ? "Enviadas " + count + ". " + saved.error : saved.error;
+      else if (count) line.textContent = "Enviadas " + count + " corridas a Supabase.";
+      else if (!quiet) line.textContent = "No había corridas pendientes.";
+      return saved;
+    }
+
+    document.getElementById("sync-supabase").addEventListener("click", async () => {
+      const button = document.getElementById("sync-supabase");
+      button.disabled = true;
+      try {
+        await pushUnsentRuns(false);
+      } catch (error) {
+        document.getElementById("sync-line").textContent = "No se pudo enviar a la base de datos.";
+      }
+      button.disabled = false;
+    });
+
+    const tabCopy = {
+      live: ["Medición en vivo", "Banco A (LAN1–4) y Banco B (LAN5–8). Wi‑Fi 5 y 2.4 por banco."],
+      ont: ["Laboratorio de Certificación", "GPON. La huella lee RX y TX por el cable Ethernet. Después arranca la medición en vivo."],
+      emta: ["Laboratorio de Certificación", "DOCSIS. La huella lee DS y US por el cable Ethernet. Después arranca la medición en vivo."],
+      history: ["Historial de medición", "Corridas anteriores y si quedaron en la base de datos."],
+      settings: ["Ajustes y referencia", "Perfiles por tecnología y modelo: ONT GPON y EMTA DOCSIS."],
+      wifi: ["Módulo Wi-Fi", "Throughput independiente: primero 5 GHz y después 2.4 GHz, hacia LAN2 o LAN3."]
+    };
+    let activePortal = "";
+
+    function detectedFamily() {
+      const a = benchDetectedFamily("A");
+      const b = benchDetectedFamily("B");
+      if (a && b && a === b) return a;
+      if (a && !b) return a;
+      if (b && !a) return b;
+      const family = lastReading && lastReading.family;
+      if (family === "ont" || family === "emta") return family;
+      return a || b || "";
+    }
+
+    function syncSidebarDevice() {
+      const nameEl = document.getElementById("sidebar-device-name");
+      const kindEl = document.getElementById("sidebar-device-kind");
+      if (!nameEl || !kindEl) return;
+      const pick = benchIdentities.A && benchIdentities.A.serial
+        ? benchIdentities.A
+        : (benchIdentities.B && benchIdentities.B.serial ? benchIdentities.B : lastReading);
+      if (!pick || !pick.model) {
+        nameEl.textContent = "Sin equipo";
+        kindEl.textContent = "—";
+        return;
+      }
+      nameEl.textContent = pick.model;
+      const fam = pick.family || inferFamilyFromModel(pick.model);
+      kindEl.textContent = fam === "emta" ? "EMTA" : (fam === "ont" ? "ONT" : "—");
+    }
+
+    function inferFamilyFromModel(model) {
+      const token = String(model || "").trim().toUpperCase().replace(/\s+/g, "");
+      if (!token) return "";
+      if (token.startsWith("HG") || token.includes("HG8")) return "ont";
+      if (token.startsWith("CG") || token.includes("CGNV") || token === "KAON") return "emta";
+      return "";
+    }
+
+    function benchDetectedFamily(benchId) {
+      const id = benchIdentityForBench(benchId);
+      if (id.family === "ont" || id.family === "emta") return id.family;
+      return inferFamilyFromModel(id.model) || "";
+    }
+
+    function technologyBlockedForBench(benchId) {
+      const family = benchDetectedFamily(benchId);
+      return Boolean(family && activePortal && activePortal !== family);
+    }
+
+    function technologyBlocked() {
+      return technologyBlockedForBench("A") || technologyBlockedForBench("B") || (() => {
+        const family = detectedFamily();
+        return Boolean(family && activePortal && activePortal !== family);
+      })();
+    }
+
+    function activatePortalModule(module) {
+      if (module !== "ont" && module !== "emta") return;
+      const tab = document.querySelector('.nav-item[data-tab="' + module + '"]');
+      if (tab && !tab.disabled) tab.click();
+    }
+
+    function applyTechnologyLock(running) {
+      const family = detectedFamily();
+      document.querySelectorAll('.nav-item[data-tab="ont"], .nav-item[data-tab="emta"]').forEach((node) => {
+        node.disabled = Boolean(family) && node.dataset.tab !== family;
+      });
+      const start = document.getElementById("start-cert");
+      if (start) start.disabled = Boolean(running) || technologyBlocked();
+      document.querySelectorAll("[data-bench-cert]").forEach((node) => {
+        const benchId = node.getAttribute("data-bench-cert") || "A";
+        node.disabled = Boolean(running) || technologyBlockedForBench(benchId);
+      });
+      if (!technologyBlocked()) return;
+      const kind = family === "emta" ? "EMTA DOCSIS" : "ONT GPON";
+      const other = activePortal === "emta" ? "EMTA" : "ONT";
+      const message = "Este equipo es " + kind + ". La certificación no se corre en el módulo " + other + ".";
+      const line = document.getElementById("identity-line");
+      if (line) line.textContent = message;
+      feedback.textContent = message;
+    }
+
+    document.querySelectorAll(".nav-item").forEach((item) => {
+      item.addEventListener("click", () => {
+        if (item.disabled) return;
+        document.querySelectorAll(".nav-item").forEach((node) => node.classList.remove("active"));
+        item.classList.add("active");
+        const name = item.dataset.tab;
+        if (name === "ont" || name === "emta") activePortal = name;
+        const moduleName = item.dataset.module || name;
+        document.querySelectorAll(".module").forEach((node) => { node.hidden = node.id !== "module-" + moduleName; });
+        const copy = tabCopy[name];
+        document.getElementById("page-title").textContent = copy[0];
+        document.getElementById("page-subtitle").textContent = copy[1];
+        const portalTitle = document.getElementById("portal-module-title");
+        const portalNote = document.getElementById("portal-module-note");
+        if (name === "emta") {
+          portalTitle.textContent = "Laboratorio de Certificación";
+          portalNote.textContent = "DOCSIS. Kaon CG-2200 y Hitron CGNV5 usan portal distinto. Buscar lee el modelo real del cable.";
+          const modelInput = document.getElementById("portal-model");
+          const passInput = document.getElementById("dut-password");
+          if (modelInput) {
+            const current = modelInput.value.trim();
+            if (!current || current.startsWith("HG") || current === "CGNV5") {
+              modelInput.value = "CG-2200";
+            }
+          }
+          if (passInput && passInput.value === "c1@r0") {
+            passInput.value = "";
+            setPortalFeedback("Los EMTA no usan la clave Huawei c1@r0. Escribe admin / Cl@r0 (o la del módem) y pulsa Buscar.");
+          }
+          if (!lastReading) paintReading({family: "emta"});
+        } else if (name === "ont") {
+          portalTitle.textContent = "Laboratorio de Certificación";
+          portalNote.textContent = "GPON. La huella lee RX y TX por el cable Ethernet. Después arranca la medición en vivo.";
+          if (!lastReading) paintReading({family: "ont"});
+        } else if (name === "wifi") {
+          loadWifiNetworks(true);
+        }
+        applyTechnologyLock(Boolean(stop && !stop.disabled));
+      });
+    });
+
+    let lastWifi = {};
+    let lastIdentity = {};
+    let activeCertBenchId = "";
+    let suppressBenchReadingsPoll = false;
+    let suppressBenchIdentitiesPoll = false;
+    const benchIdentities = {A: {}, B: {}};
+    const benchInventories = {A: {}, B: {}};
+
+    function hasFullInventory(data) {
+      if (!data || !data.serial) return false;
+      return Boolean(
+        data.hardware || data.software || data.tx_power || data.rx_power || data.temperature || data.ont_state
+      );
+    }
+
+    function saveBenchInventoryToStorage() {
+      /* Sin sessionStorage: la lectura no sobrevive reinicio de panel ni F5 antigua. */
+    }
+    try {
+      const savedIdentity = sessionStorage.getItem("tc-last-identity");
+      if (savedIdentity) lastIdentity = JSON.parse(savedIdentity);
+    } catch (_err) {
+      lastIdentity = {};
+    }
+    let lastReading = null;
+
+    function readingFieldRows(found) {
+      const emta = found && found.family === "emta";
+      if (emta) {
+        return [
+          ["DEVICE TYPE", found.model],
+          ["SN", found.serial],
+          ["HARDWARE", found.hardware],
+          ["SOFTWARE", found.software],
+          ["DOCSIS", found.docsis_status],
+          ["MAC", found.mac ? String(found.mac).toUpperCase() : ""],
+          ["RED WI-FI 2.4", found.ssid_24],
+          ["CLAVE 2.4", found.wifi_password_24],
+          ["RED WI-FI 5", found.ssid_50],
+          ["CLAVE 5", found.wifi_password_50],
+        ];
+      }
+      return [
+        ["DEVICE TYPE", found && found.model],
+        ["SN", found && found.serial],
+        ["HARDWARE", found && found.hardware],
+        ["SOFTWARE", found && found.software],
+        ["ESTADO ONT", found && found.ont_state],
+        ["TX OPTICAL POWER", found && found.tx_power],
+        ["RX OPTICAL POWER", found && found.rx_power],
+        ["VOLTAJE", found && found.voltage],
+        ["BIAS", found && found.bias],
+        ["TEMPERATURA", found && found.temperature],
+        ["MAC", found && found.mac ? String(found.mac).toUpperCase() : ""],
+        ["RED WI-FI 2.4", found && found.ssid_24],
+        ["CLAVE 2.4", found && found.wifi_password_24],
+        ["RED WI-FI 5", found && found.ssid_50],
+        ["CLAVE 5", found && found.wifi_password_50],
+      ];
+    }
+
+    function paintReadingBench(benchId, found) {
+      const box = document.getElementById("reading-bank-" + benchId.toLowerCase());
+      if (!box) return;
+      const ontState = found && found.ont_state ? String(found.ont_state).toUpperCase() : "";
+      const value = (text, label) => {
+        const raw = text ? String(text).trim() : "";
+        if (!raw || raw === "--") {
+          if ((label === "TX OPTICAL POWER" || label === "RX OPTICAL POWER") && ontState && ontState !== "O5") {
+            return "— (estado " + ontState + ", sin PON)";
+          }
+          return "—";
+        }
+        return raw;
+      };
+      box.replaceChildren();
+      const rows = readingFieldRows(found || {});
+      rows.forEach((card) => {
+        const node = document.createElement("article");
+        node.className = "metric";
+        const label = document.createElement("small");
+        label.textContent = card[0];
+        const reading = document.createElement("b");
+        reading.textContent = value(card[1], card[0]);
+        node.append(label, reading);
+        box.append(node);
+      });
+      if (found && found.serial) {
+        const fam = found.family || inferFamilyFromModel(found.model);
+        if (fam === "ont" || fam === "emta") found.family = fam;
+        if (benchId === "A" || !benchIdentities.A.serial) {
+          lastReading = Object.assign({}, found);
+        }
+        syncSidebarDevice();
+        applyTechnologyLock(Boolean(stop && !stop.disabled));
+      }
+    }
+
+    function paintReadingBenchLoading(benchId) {
+      const box = document.getElementById("reading-bank-" + benchId.toLowerCase());
+      if (!box) return;
+      box.replaceChildren();
+      const rows = readingFieldRows({family: "ont"});
+      rows.forEach((card) => {
+        const node = document.createElement("article");
+        node.className = "metric";
+        const label = document.createElement("small");
+        label.textContent = card[0];
+        const reading = document.createElement("b");
+        reading.textContent = "Leyendo…";
+        node.append(label, reading);
+        box.append(node);
+      });
+    }
+
+    function benchReadingData(benchId) {
+      if (hasFullInventory(benchInventories[benchId])) {
+        return benchInventories[benchId];
+      }
+      if (hasFullInventory(benchIdentities[benchId])) {
+        return benchIdentities[benchId];
+      }
+      if (benchId === "A" && lastReading && hasFullInventory(lastReading)) {
+        return lastReading;
+      }
+      return benchIdentities[benchId] || {};
+    }
+
+    function paintAllReadings() {
+      paintReadingBench("A", benchReadingData("A") || lastReading);
+      paintReadingBench("B", benchReadingData("B"));
+    }
+
+    function paintReading(found) {
+      if (found && found.bench_id) {
+        benchIdentities[found.bench_id] = Object.assign({}, benchIdentities[found.bench_id] || {}, found);
+        paintReadingBench(found.bench_id, found);
+        return;
+      }
+      if (found) lastReading = found;
+      paintAllReadings();
+    }
+
+    function setBenchPasswordVisible(benchId, visible) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const input = document.getElementById("bench-" + prefix + "-password");
+      if (input) input.type = visible ? "text" : "password";
+    }
+
+    function syncGlobalShowPassword() {
+      const mode = document.getElementById("show-password").checked ? "text" : "password";
+      document.getElementById("dut-password").type = mode;
+      setBenchPasswordVisible("A", mode === "text");
+      setBenchPasswordVisible("B", mode === "text");
+      const aToggle = document.getElementById("bench-a-show-password");
+      const bToggle = document.getElementById("bench-b-show-password");
+      if (aToggle) aToggle.checked = mode === "text";
+      if (bToggle) bToggle.checked = mode === "text";
+    }
+
+    document.getElementById("show-password").addEventListener("change", () => {
+      syncGlobalShowPassword();
+    });
+    document.getElementById("bench-a-show-password").addEventListener("change", (event) => {
+      setBenchPasswordVisible("A", event.target.checked);
+    });
+    document.getElementById("bench-b-show-password").addEventListener("change", (event) => {
+      setBenchPasswordVisible("B", event.target.checked);
+    });
+
+    function applyDetectedBenchProfile(benchId, model) {
+      const token = String(model || "").trim();
+      if (!token) return;
+      const prefix = benchId === "B" ? "b" : "a";
+      const input = document.getElementById("bench-" + prefix + "-profile");
+      if (!input) return;
+      const current = input.value.trim();
+      if (!current || current !== token) {
+        input.value = token;
+        saveBenchCredentialsToStorage();
+      }
+    }
+
+    async function saveBenchPortalProfile(benchId) {
+      const creds = benchCredentialFields(benchId);
+      if (!creds.portal_model || !creds.portal_host || !creds.dut_user || !creds.dut_password) {
+        const msg = "Banco " + benchId + ": completa modelo, Portal IP, usuario y contraseña antes de guardar.";
+        setPortalFeedback(msg);
+        return;
+      }
+      setPortalFeedback("Guardando perfil del banco " + benchId + "…");
+      try {
+        const response = await fetch("/api/portal", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            token,
+            model: creds.portal_model,
+            host: creds.portal_host,
+            username: creds.dut_user,
+            password: creds.dut_password
+          })
+        });
+        const saved = await response.json();
+        if (saved.ok) {
+          mergePortalList(saved.portals || [{model: creds.portal_model, host: creds.portal_host, username: creds.dut_user, password: creds.dut_password}]);
+          setPortalFeedback("Perfil " + creds.portal_model + " guardado (banco " + benchId + "). Pulsa 1 · Buscar.");
+          saveBenchCredentialsToStorage();
+        } else {
+          setPortalFeedback(saved.error || "No se pudo guardar el perfil.");
+        }
+      } catch (_err) {
+        setPortalFeedback("No se pudo guardar el perfil. Recarga el panel.");
+      }
+    }
+    document.getElementById("path-ethernet").addEventListener("click", () => {
+      document.getElementById("path-ethernet").classList.add("active");
+      document.getElementById("path-wifi").classList.remove("active");
+      stage.value = "simultaneous";
+      feedback.textContent = "Módulo Ethernet: LAN1 a LAN4, dos transmiten y dos quedan en cliente, luego se cruzan.";
+    });
+    document.getElementById("path-wifi").addEventListener("click", () => {
+      document.getElementById("path-wifi").classList.add("active");
+      document.getElementById("path-ethernet").classList.remove("active");
+      stage.value = "wifi";
+      const note = "Módulo Wi-Fi: primero 5 GHz y después 2.4 GHz hacia LAN2, o hacia LAN3 si LAN2 no tiene IP. El radio vuelve a la red del laboratorio al terminar.";
+      feedback.textContent = note;
+      document.getElementById("identity-line").textContent = note;
+    });
+
+    function rememberIdentity(found) {
+      if (!found || !found.serial) return;
+      lastIdentity = {
+        dut_serial: found.serial || "",
+        dut_mac: found.mac || "",
+        dut_brand: found.brand || "",
+        dut_model: found.model || ""
+      };
+      try {
+        sessionStorage.setItem("tc-last-identity", JSON.stringify(lastIdentity));
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+
+    function loadWifiNetworks(rescan) {
+      const note = document.getElementById("wifi-scan-note");
+      const body = document.querySelector("#wifi-networks tbody");
+      if (!body) return;
+      if (note) note.textContent = rescan ? "Buscando redes…" : "Leyendo la lista…";
+      fetch("/api/wifi/networks" + (rescan ? "?rescan=1" : ""))
+        .then((response) => response.json())
+        .then((payload) => {
+          body.replaceChildren();
+          const rows = payload.networks || [];
+          if (!rows.length) {
+            if (note) note.textContent = payload.error || "El radio no ve redes Wi-Fi.";
+            return;
+          }
+          if (note) note.textContent = rows.length + " redes. El canal es el que anuncia cada una.";
+          for (const row of rows) {
+            const tr = document.createElement("tr");
+            if (row.active) tr.className = "active";
+            for (const value of [row.active ? row.ssid + " · en uso" : row.ssid, row.channel || "—", row.band || "—", row.frequency || "—", row.signal ? row.signal + "%" : "—"]) {
+              const cell = document.createElement("td");
+              cell.textContent = value;
+              tr.appendChild(cell);
+            }
+            body.appendChild(tr);
+          }
+        })
+        .catch(() => {
+          if (note) note.textContent = "No se pudo leer la lista de redes.";
+        });
+    }
+    const wifiScan = document.getElementById("wifi-scan");
+    if (wifiScan) wifiScan.addEventListener("click", () => loadWifiNetworks(true));
+
+    function refreshWifiPlan() {
+      const node = document.getElementById("wifi-targets");
+      if (!node) return;
+      const found = lastReading || {};
+      const ssid24 = found.ssid_24 || lastWifi.wifi_ssid_24 || "";
+      const ssid50 = found.ssid_50 || lastWifi.wifi_ssid_50 || "";
+      if (!ssid24 || !ssid50) {
+        node.textContent = "Antes de medir, pulsa Buscar en el módulo ONT o EMTA para leer las dos redes.";
+        return;
+      }
+      node.textContent = "2.4 GHz: " + ssid24 + " · 5 GHz: " + ssid50 + ". El servidor es LAN2, o LAN3 si LAN2 no tiene IP.";
+    }
+
+    function wifiPayload() {
+      const found = lastReading || {};
+      return {
+        wifi_ssid_24: found.ssid_24 || lastWifi.wifi_ssid_24 || "",
+        wifi_password_24: found.wifi_password_24 || lastWifi.wifi_password_24 || "",
+        wifi_ssid_50: found.ssid_50 || lastWifi.wifi_ssid_50 || "",
+        wifi_password_50: found.wifi_password_50 || lastWifi.wifi_password_50 || ""
+      };
+    }
+
+    function applyBenchProfile(benchId) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const model = document.getElementById("bench-" + prefix + "-profile").value.trim();
+      if (!model) return;
+      const saved = portals.find((item) => item.model === model);
+      if (!saved) return;
+      document.getElementById("bench-" + prefix + "-user").value = saved.username || "";
+      document.getElementById("bench-" + prefix + "-password").value = saved.password || "";
+      if (saved.host) document.getElementById("bench-" + prefix + "-host").value = saved.host;
+      document.getElementById("portal-model").value = model;
+      saveBenchCredentialsToStorage();
+    }
+
+    function benchCredentialFields(benchId) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const globalHost = document.getElementById("portal-host").value.trim();
+      const profile = document.getElementById("bench-" + prefix + "-profile").value.trim();
+      return {
+        dut_user: document.getElementById("bench-" + prefix + "-user").value.trim(),
+        dut_password: document.getElementById("bench-" + prefix + "-password").value,
+        portal_host: document.getElementById("bench-" + prefix + "-host").value.trim() || globalHost,
+        portal_model: profile || document.getElementById("portal-model").value.trim()
+      };
+    }
+
+    function benchCredentialsPayload() {
+      return {A: benchCredentialFields("A"), B: benchCredentialFields("B")};
+    }
+
+    function loadBenchCredentialsFromStorage() {
+      try {
+        const raw = sessionStorage.getItem("tc-bench-credentials");
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        for (const benchId of ["A", "B"]) {
+          const prefix = benchId === "B" ? "b" : "a";
+          const block = data[benchId];
+          if (!block) continue;
+          if (block.dut_user) document.getElementById("bench-" + prefix + "-user").value = block.dut_user;
+          if (block.dut_password) document.getElementById("bench-" + prefix + "-password").value = block.dut_password;
+          if (block.portal_host) document.getElementById("bench-" + prefix + "-host").value = block.portal_host;
+          if (block.portal_model) document.getElementById("bench-" + prefix + "-profile").value = block.portal_model;
+        }
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+
+    function saveBenchCredentialsToStorage() {
+      try {
+        sessionStorage.setItem("tc-bench-credentials", JSON.stringify(benchCredentialsPayload()));
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+
+    async function startRun(options) {
+      const scopeBench =
+        options && Object.prototype.hasOwnProperty.call(options, "benchId")
+          ? String(options.benchId || "").toUpperCase()
+          : "";
+      let credBench = (options && options.credentialBenchId)
+        ? String(options.credentialBenchId).toUpperCase()
+        : scopeBench;
+      activeCertBenchId = scopeBench;
+      const dualEight = !scopeBench && stationPortCount >= 8;
+      let benchCreds = null;
+      function benchCredsComplete(id) {
+        const block = benchCredentialFields(id);
+        return block.portal_model && block.portal_host && block.dut_user && block.dut_password;
+      }
+      let portalModel = "";
+      let portalHost = "";
+      let dutUser = "";
+      let dutPassword = "";
+      if (scopeBench) {
+        credBench = scopeBench;
+        benchCreds = benchCredentialFields(scopeBench);
+        portalModel = benchCreds.portal_model;
+        portalHost = benchCreds.portal_host;
+        dutUser = benchCreds.dut_user;
+        dutPassword = benchCreds.dut_password;
+      } else if (dualEight) {
+        credBench = "";
+        benchCreds = null;
+      } else {
+        credBench = credBench || "A";
+        benchCreds = benchCredentialFields(credBench);
+        portalModel = benchCreds.portal_model || document.getElementById("portal-model").value.trim();
+        portalHost = benchCreds.portal_host || document.getElementById("portal-host").value.trim();
+        dutUser = benchCreds.dut_user || document.getElementById("dut-user").value.trim();
+        dutPassword = benchCreds.dut_password || document.getElementById("dut-password").value;
+      }
+      const dualOk = !dualEight || (benchCredsComplete("A") && benchCredsComplete("B"));
+      if (dualEight && dualOk) {
+        const a = benchCredentialFields("A");
+        portalModel = a.portal_model;
+        portalHost = a.portal_host;
+        dutUser = a.dut_user;
+        dutPassword = a.dut_password;
+      }
+      const scopedOk = !scopeBench || benchCredsComplete(scopeBench);
+      if (!scopedOk || !dualOk || !portalModel || !portalHost || !dutUser || !dutPassword) {
+        const missing = scopeBench && !scopedOk
+          ? "Banco " + scopeBench + ": completa modelo, Portal IP, usuario y contraseña en la tarjeta del banco."
+          : dualEight && !dualOk
+          ? "Corrida A+B: completa modelo, Portal IP, usuario y contraseña en banco A y en banco B."
+          : "Completa modelo, Portal IP, usuario y contraseña"
+            + (credBench ? " en el banco " + credBench : "") + ".";
+        feedback.textContent = missing;
+        setPortalFeedback(missing);
+        const wifiFeedback = document.getElementById("wifi-feedback");
+        if (wifiFeedback) wifiFeedback.textContent = missing;
+        return {ok: false, error: missing};
+      }
+      button.disabled = true;
+      const waiting = panelPrivileged
+        ? "Arrancando la corrida (namespaces y DHCP en las 8 LAN)…"
+        : "Pidiendo permiso… escribe la contraseña en la ventana.";
+      feedback.textContent = waiting;
+      setPortalFeedback(waiting);
+      const wifiFeedback = document.getElementById("wifi-feedback");
+      if (wifiFeedback) wifiFeedback.textContent = waiting;
+      let started;
+      try {
+        const response = await fetch("/api/run", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(Object.assign({
+            token,
+            stage: stage.value,
+            duration: Number(duration.value),
+            portal_model: portalModel,
+            portal_host: portalHost,
+            dut_user: dutUser,
+            dut_password: dutPassword,
+            portal_module: options && options.portalModule || "",
+            bench_id: scopeBench,
+            bench_credentials: dualEight ? benchCredentialsPayload() : undefined
+          }, wifiPayload(), lastIdentity))
+        });
+        started = await response.json();
+      } catch (_err) {
+        const lost = "No hubo respuesta del panel. Recarga con Ctrl+F5 y pulsa Recuperar namespaces.";
+        feedback.textContent = lost;
+        setPortalFeedback(lost);
+        button.disabled = false;
+        return {ok: false, error: lost};
+      }
+      if (!started.ok) {
+        activeCertBenchId = "";
+      }
+      const result = started.ok ? "Prueba iniciada." : (started.error || "No se pudo iniciar.");
+      feedback.textContent = result;
+      setPortalFeedback(result);
+      if (wifiFeedback) wifiFeedback.textContent = result;
+      paint(started);
+      return started;
+    }
+
+    const recoverNs = document.getElementById("recover-ns");
+    if (recoverNs) {
+      recoverNs.addEventListener("click", async () => {
+        if (recoverNs.disabled) return;
+        recoverNs.disabled = true;
+        feedback.textContent = "Recuperando namespaces y devolviendo NIC al host…";
+        try {
+          const response = await fetch("/api/recover", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({token})
+          });
+          const payload = await response.json();
+          const lines = (payload.messages || []).join(" ") || payload.error || "Listo.";
+          feedback.textContent = payload.ok ? lines : (payload.error || lines);
+          setPortalFeedback(feedback.textContent);
+          paint(payload);
+        } catch (_err) {
+          feedback.textContent = "No se pudo contactar al panel.";
+        }
+        recoverNs.disabled = Boolean(button.disabled && stop && stop.disabled);
+      });
+    }
+
+    button.addEventListener("click", async () => {
+      const label = stage.options[stage.selectedIndex].text;
+      const seconds = timed.has(stage.value) ? duration.options[duration.selectedIndex].text : "sin medición de throughput";
+      const wifiNote = stage.value === "wifi"
+        ? " El radio deja la red del laboratorio, mide primero 5 GHz y después 2.4 hacia LAN2 (o LAN3) y vuelve."
+        : "";
+      if (stationPortCount >= 8 && stage.value === "simultaneous") {
+        if (!(await ensureBenchReadyForCert("A")) || !(await ensureBenchReadyForCert("B"))) {
+          return;
+        }
+        if (!confirm("Throughput simultáneo en 8 LAN — bancos A y B (" + seconds + " por ventana)?")) {
+          return;
+        }
+        applyBenchIdentityForCert("A");
+        dualCertQueue = {active: true};
+        const started = await startRun({
+          portalModule: activePortal || "ont",
+          benchId: "",
+          credentialBenchId: "A"
+        });
+        if (!started || !started.ok) {
+          dualCertQueue = null;
+        }
+        return;
+      }
+      if (!confirm("Correr " + label + " (" + seconds + ")?" + wifiNote)) return;
+      await startRun({portalModule: activePortal || "ont", credentialBenchId: "A"});
+    });
+
+    async function startWifiBench(benchId) {
+      const wifiDuration = document.getElementById("wifi-duration");
+      const wifiFeedback = document.getElementById("wifi-feedback");
+      const id = benchIdentities[benchId] || {};
+      if (!id.wifi_ready && !id.serial) {
+        await discoverBenches(benchId);
+      }
+      const refreshed = benchIdentities[benchId] || {};
+      if (!refreshed.wifi_ready) {
+        const msg = "Falta lectura Wi‑Fi del banco " + benchId + ". Busca el portal y confirma SSID/claves 2.4 y 5.";
+        if (wifiFeedback) wifiFeedback.textContent = msg;
+        return;
+      }
+      lastIdentity = {
+        dut_serial: refreshed.serial || "",
+        dut_mac: refreshed.mac || "",
+        dut_brand: refreshed.brand || "",
+        dut_model: refreshed.model || ""
+      };
+      const seconds = wifiDuration.options[wifiDuration.selectedIndex].text;
+      const lan = benchId === "B" ? "LAN6/LAN7" : "LAN2/LAN3";
+      if (!confirm("Banco " + benchId + ": un radio, 5 GHz y después 2.4 (" + seconds + " c/u) hacia " + lan + ". ¿Continuar?")) return;
+      const previousStage = stage.value;
+      const previousDuration = duration.value;
+      stage.value = "wifi";
+      duration.value = wifiDuration.value;
+      try {
+        await startRun({benchId});
+      } finally {
+        stage.value = previousStage;
+        duration.value = previousDuration;
+      }
+    }
+    const wifiRunA = document.getElementById("wifi-run-a");
+    const wifiRunB = document.getElementById("wifi-run-b");
+    if (wifiRunA) wifiRunA.addEventListener("click", () => startWifiBench("A"));
+    if (wifiRunB) wifiRunB.addEventListener("click", () => startWifiBench("B"));
+
+    stop.addEventListener("click", async () => {
+      if (!confirm("Detener la prueba en curso? Las tarjetas vuelven a la PC.")) return;
+      stop.disabled = true;
+      const wifiStop = document.getElementById("wifi-stop");
+      if (wifiStop) wifiStop.disabled = true;
+      feedback.textContent = "Deteniendo…";
+      const wifiFeedback = document.getElementById("wifi-feedback");
+      if (wifiFeedback) wifiFeedback.textContent = "Deteniendo…";
+      const response = await fetch("/api/stop", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token})
+      });
+      const stopped = await response.json();
+      feedback.textContent = stopped.ok ? "Deteniendo la prueba." : (stopped.error || "No se pudo detener.");
+      paint(stopped);
+    });
+    const wifiStop = document.getElementById("wifi-stop");
+    if (wifiStop) wifiStop.addEventListener("click", () => stop.click());
+    document.getElementById("portal-stop").addEventListener("click", () => stop.click());
+
+    document.getElementById("portal-model").addEventListener("change", () => {
+      const name = document.getElementById("portal-model").value.trim();
+      const saved = portals.find((item) => item.model === name);
+      if (!saved) return;
+      document.getElementById("portal-host").value = saved.host;
+      document.getElementById("dut-user").value = saved.username;
+      document.getElementById("dut-password").value = saved.password;
+    });
+
+    function inventoryText(found) {
+      const rows = [
+        ["Marca", found.brand],
+        ["Modelo", found.model],
+        ["Device Type", found.device_type],
+        ["SN", found.serial],
+        ["Hardware Version", found.hardware],
+        ["Software Version", found.software],
+        ["MAC", found.mac ? String(found.mac).toUpperCase() : ""],
+        ["TX Optical Power", found.tx_power],
+        ["RX Optical Power", found.rx_power],
+        ["Working Voltage", found.voltage],
+        ["Bias Current", found.bias],
+        ["Working Temperature", found.temperature],
+        ["WLAN Status", found.wlan_status],
+        ["WLAN Channel", found.wlan_channel],
+        ["SSID 2.4", found.ssid_24],
+        ["Clave Wi-Fi 2.4", found.wifi_password_24],
+        ["DOCSIS", found.docsis_status],
+        ["Downstream", found.ds_channels],
+        ["DS power", found.ds_power],
+        ["Upstream", found.us_channels],
+        ["US power", found.us_power],
+        ["SSID 5", found.ssid_50],
+        ["Clave Wi-Fi 5", found.wifi_password_50],
+        ["Puerto", found.iface]
+      ];
+      return rows.filter((row) => row[1]).map((row) => row[0] + ": " + row[1]).join("\n");
+    }
+
+    function showFound(found) {
+      if (found && String(found.brand || "").toUpperCase() === "HITRON") found.brand = "HISTRON";
+      const profileName = found.profile || "";
+      let shown = found.detected_model || found.model || profileName;
+      const brandUp = String(found.brand || "").toUpperCase();
+      if (shown === "Kaon" && brandUp === "KAON") {
+        shown = "CG-2200";
+      }
+      if (brandUp === "KAON" && (shown === "CGNV5" || shown === "CGNV5CLR")) {
+        shown = "CG-2200";
+      }
+      const formModel = document.getElementById("portal-model").value.trim();
+      const identity = [found.brand, shown].filter(Boolean).join(" ")
+        || (formModel ? formModel : "")
+        || "Sin equipo";
+      document.getElementById("found-name").textContent = identity;
+      document.getElementById("summary-name").textContent = identity;
+      const host = found.gateway || document.getElementById("portal-host").value;
+      document.getElementById("found-host").textContent = host || "Busca por Ethernet";
+      document.getElementById("summary-host").textContent = host || "";
+      if (!shown) return;
+      const input = document.getElementById("portal-model");
+      input.value = shown;
+      appliedModel = shown;
+      const saved = portals.find((item) => item.model === profileName)
+        || portals.find((item) => item.model === shown)
+        || portals.find((item) => item.model === found.profile);
+      if (saved && found.profile && document.getElementById("portal-model").value !== found.profile) {
+        document.getElementById("portal-model").value = found.profile;
+      }
+      if (saved) {
+        document.getElementById("portal-host").value = saved.host;
+        document.getElementById("dut-user").value = saved.username;
+        document.getElementById("dut-password").value = saved.password;
+      } else if (shown === "CGNV5") {
+        const passInput = document.getElementById("dut-password");
+        if (passInput && passInput.value === "c1@r0") passInput.value = "";
+      }
+      portalFromDiscovery = true;
+      const note = document.getElementById("detected-model");
+      note.hidden = false;
+      note.textContent = "Equipo detectado: " + identity;
+      document.getElementById("sidebar-device-name").textContent = identity;
+      document.getElementById("sidebar-device-kind").textContent = found.family === "emta" ? "EMTA" : "ONT";
+    }
+
+    async function runDiscover() {
+      const discover = document.getElementById("discover");
+      const passField = document.getElementById("dut-password");
+      if (!passField.value.trim()) {
+        const hint = "Escribe la contraseña del equipo (EMTA: suele ser Cl@r0, no la del ONT Huawei) y pulsa Buscar.";
+        setPortalFeedback(hint);
+        feedback.textContent = hint;
+        return;
+      }
+      discover.disabled = true;
+      const waiting = "Renovando DHCP en el puerto de prueba y leyendo el portal…";
+      feedback.textContent = waiting;
+      setPortalFeedback(waiting);
+      let found;
+      try {
+        const response = await fetch("/api/discover", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            token,
+            portal_model: document.getElementById("portal-model").value.trim(),
+            portal_host: document.getElementById("portal-host").value.trim(),
+            dut_user: document.getElementById("dut-user").value.trim(),
+            dut_password: document.getElementById("dut-password").value
+          })
+        });
+        found = await response.json();
+      } catch (error) {
+        const message = "No se pudo contactar al panel. Recarga la página e intenta otra vez.";
+        setPortalFeedback(message);
+        feedback.textContent = message;
+        discover.disabled = Boolean(button.disabled && stop && !stop.disabled);
+        return {ok: false, error: message};
+      }
+      lastReading = found;
+      showFound(found);
+      paintReading(found);
+      if (found.ok && found.serial) {
+        if (found.gateway) document.getElementById("portal-host").value = found.gateway;
+        rememberIdentity(found);
+        lastWifi = {
+          wifi_ssid_24: found.ssid_24 || "",
+          wifi_password_24: found.wifi_password_24 || "",
+          wifi_ssid_50: found.ssid_50 || "",
+          wifi_password_50: found.wifi_password_50 || ""
+        };
+        refreshWifiPlan();
+        const wifiReady = found.ssid_24 && found.ssid_50 && found.wifi_password_24 && found.wifi_password_50;
+        document.getElementById("identity-line").textContent = wifiReady
+          ? "Lectura lista, con SSID 2.4, SSID 5 y sus claves. La medición en vivo arranca con Iniciar Certificación."
+          : "Lectura lista, pero faltan SSID o claves de 2.4 y 5 GHz.";
+        const done = wifiReady
+          ? "Lectura lista. Revisa la ficha y pulsa Iniciar Certificación."
+          : "La ficha no trajo los SSID o las claves Wi-Fi.";
+        feedback.textContent = done;
+        setPortalFeedback(done);
+      } else {
+        document.getElementById("identity-line").textContent = "";
+        const message = found.error || "No se reconoció el equipo.";
+        feedback.textContent = message;
+        setPortalFeedback(message);
+      }
+      discover.disabled = Boolean(button.disabled && stop && !stop.disabled);
+      return found;
+    }
+
+    document.getElementById("discover").addEventListener("click", () => { runDiscover(); });
+
+    function paintBenchHeader(benchId, data) {
+      const prefix = benchId === "A" ? "a" : "b";
+      const name = document.getElementById("bench-" + prefix + "-name");
+      const sn = document.getElementById("bench-" + prefix + "-sn");
+      const route = document.getElementById("bench-" + prefix + "-route");
+      const order = document.getElementById("bench-" + prefix + "-order");
+      if (!name || !sn || !order) return;
+      if (!data || !data.serial) {
+        name.textContent = "Sin equipo";
+        sn.textContent = "SN —";
+        if (route && !route.textContent.includes("Inventario por")) {
+          route.textContent = "Ethernet · pulsa 1 · Buscar";
+        }
+        order.textContent = "Orden TC —";
+        return;
+      }
+      const model = data.model || data.brand || "Equipo";
+      name.textContent = model;
+      const mac = data.mac ? String(data.mac).toUpperCase() : "";
+      sn.textContent = data.serial + (mac ? " · " + mac : "");
+      if (route && !data.warning && !String(route.textContent || "").includes("Inventario por")) {
+        const host = data.gateway || document.getElementById("bench-" + prefix + "-host").value.trim() || "DHCP";
+        route.textContent = "· " + host;
+      }
+      if (data.run_id_hint) {
+        order.textContent = (data.run_reused ? "Orden " : "Orden nueva ") + data.run_id_hint;
+      } else {
+        order.textContent = "Orden nueva al certificar";
+      }
+    }
+
+    function paintBenchCard(benchId, data) {
+      if (!data || !data.serial) {
+        benchIdentities[benchId] = {};
+        paintBenchHeader(benchId, {});
+        return;
+      }
+      benchIdentities[benchId] = data;
+      paintBenchHeader(benchId, data);
+    }
+
+    function applyBenchReadings(map) {
+      if (!map || typeof map !== "object") return;
+      for (const benchId of ["A", "B"]) {
+        const row = map[benchId];
+        if (!hasFullInventory(row)) continue;
+        benchInventories[benchId] = Object.assign({}, row);
+        benchIdentities[benchId] = Object.assign({}, benchIdentities[benchId] || {}, row);
+        paintBenchHeader(benchId, row);
+        paintReadingBench(benchId, row);
+      }
+      saveBenchInventoryToStorage();
+    }
+
+    function clearBenchReadingUi(benchId) {
+      const targets = benchId === "A" || benchId === "B" ? [benchId] : ["A", "B"];
+      for (const id of targets) {
+        benchInventories[id] = {};
+        benchIdentities[id] = {};
+        paintBenchCard(id, {});
+        paintReadingBench(id, {});
+      }
+      saveBenchInventoryToStorage();
+    }
+
+    async function persistClearBenchReading(benchId) {
+      try {
+        await fetch("/api/benches/clear-reading", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token, bench_id: benchId || ""})
+        });
+      } catch (_err) {
+        /* ignore */
+      }
+    }
+
+    function finishCertBenchCleanup(job) {
+      const fromJob = job && job.bench_id ? String(job.bench_id).toUpperCase() : "";
+      const benchId = activeCertBenchId || fromJob || "";
+      suppressBenchReadingsPoll = true;
+      clearBenchReadingUi(benchId);
+      persistClearBenchReading(benchId);
+      activeCertBenchId = "";
+      const hint =
+        job && job.exit_code === 0
+          ? "Certificación terminada."
+          : "Certificación finalizada (éxito o falla).";
+      setPortalFeedback(hint + " Lectura limpiada; consulta Historial de mediciones.");
+    }
+
+    function paintBenchIdentities(map) {
+      paintBenchCard("A", (map || {}).A);
+      paintBenchCard("B", (map || {}).B);
+    }
+
+    function normalizeBenchScope(raw) {
+      const value = String(raw || "all").trim().toUpperCase();
+      return value === "A" || value === "B" ? value : "all";
+    }
+
+    function setBenchRouteNote(benchId, text) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const route = document.getElementById("bench-" + prefix + "-route");
+      if (route && text) route.textContent = text;
+    }
+
+    function setDiscoverButtonsDisabled(mode, disabled) {
+      if (mode === "all") {
+        document.querySelectorAll("[data-bench-discover], #discover-benches").forEach((node) => {
+          node.disabled = disabled;
+          node.classList.toggle("busy", disabled);
+        });
+        return;
+      }
+      document.querySelectorAll("[data-bench-discover]").forEach((node) => {
+        const isTarget = node.getAttribute("data-bench-discover") === mode;
+        node.disabled = disabled && isTarget;
+        node.classList.toggle("busy", disabled && isTarget);
+      });
+    }
+
+    async function discoverBenches(scope) {
+      const mode = normalizeBenchScope(scope);
+      const targets = mode === "all" ? ["A", "B"] : [mode];
+      for (const benchId of targets) {
+        const creds = benchCredentialFields(benchId);
+        if (!creds.dut_user || !creds.dut_password) {
+          setPortalFeedback(
+            "Banco " + benchId + ": escribe usuario y contraseña en su tarjeta "
+            + "(marca Ver contraseña si ya las guardaste)."
+          );
+          setBenchRouteNote(benchId, "Falta usuario o contraseña en esta tarjeta.");
+          return;
+        }
+      }
+      saveBenchCredentialsToStorage();
+      setDiscoverButtonsDisabled(mode, true);
+      for (const benchId of targets) {
+        paintReadingBenchLoading(benchId);
+      }
+      const waiting = mode === "all"
+        ? "Scraper: inventario en bancos A y B…"
+        : "Scraper: solo banco " + mode + "…";
+      setPortalFeedback(waiting);
+      const fallback = benchCredentialFields("A");
+      let payload;
+      try {
+        const response = await fetch("/api/benches/discover", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            token,
+            scope: mode,
+            portal_model: document.getElementById("portal-model").value.trim(),
+            portal_host: document.getElementById("portal-host").value.trim(),
+            dut_user: fallback.dut_user,
+            dut_password: fallback.dut_password,
+            bench_credentials: benchCredentialsPayload()
+          })
+        });
+        payload = await response.json();
+      } catch (_err) {
+        setPortalFeedback("No se pudo contactar al panel. Recarga e intenta de nuevo.");
+        setDiscoverButtonsDisabled(mode, false);
+        for (const benchId of targets) {
+          paintReadingBench(benchId, benchReadingData(benchId));
+        }
+        return;
+      }
+      const items = (payload.benches || []).filter((row) => !row.bench_id || targets.includes(row.bench_id));
+      let successIds = [];
+      for (const item of items) {
+        const scrapeOk = Boolean(item.ok && (item.serial || item.model || item.hardware));
+        if (scrapeOk) {
+          successIds.push(item.bench_id);
+          benchIdentities[item.bench_id] = Object.assign({}, item);
+          benchInventories[item.bench_id] = Object.assign({}, item);
+          paintBenchCard(item.bench_id, item);
+          paintReadingBench(item.bench_id, item);
+          saveBenchInventoryToStorage();
+          const routeNote = item.warning
+            ? item.warning
+            : "Ethernet · " + (item.gateway || "portal");
+          setBenchRouteNote(item.bench_id, routeNote);
+          if (item.serial && (item.bench_id === "A" || !lastIdentity.dut_serial)) {
+            lastReading = item;
+            rememberIdentity(item);
+          }
+          if (mode === "all" || item.bench_id === mode) {
+            lastWifi = {
+              wifi_ssid_24: item.ssid_24 || "",
+              wifi_password_24: item.wifi_password_24 || "",
+              wifi_ssid_50: item.ssid_50 || "",
+              wifi_password_50: item.wifi_password_50 || ""
+            };
+            refreshWifiPlan();
+          }
+        } else if (item.bench_id) {
+          applyDetectedBenchProfile(item.bench_id, item.model || item.device_type);
+          let message = item.error || "No se leyó el portal.";
+          if (item.model) {
+            message += " Detectado: " + item.model + ". Corrige la contraseña, Guardar perfil y vuelve a Buscar.";
+          }
+          setBenchRouteNote(item.bench_id, message);
+          paintReadingBench(item.bench_id, item.ok ? item : {});
+        }
+      }
+      if (mode === "all" && payload.bench_identities) {
+        paintBenchIdentities(payload.bench_identities);
+      }
+      const okCount = successIds.length;
+      const errors = items
+        .filter((row) => row.bench_id && !successIds.includes(row.bench_id) && row.error)
+        .map((row) => "Banco " + row.bench_id + ": " + row.error);
+      if (okCount) {
+        const scopeLabel = mode === "all" ? okCount + " banco(s)" : "banco " + (successIds[0] || mode);
+        setPortalFeedback(
+          "Inventario listo en " + scopeLabel + ". Revisa la lectura abajo."
+          + (errors.length ? " " + errors.join(" ") : "")
+        );
+      } else {
+        const message = errors[0] || payload.error || "El scraper no obtuvo datos del portal.";
+        setPortalFeedback(message);
+        if (mode !== "all" && !errors.length) {
+          setBenchRouteNote(mode, message);
+        }
+      }
+      for (const item of items) {
+        if (item.ok && item.gateway) {
+          const prefix = item.bench_id === "B" ? "b" : "a";
+          const hostInput = document.getElementById("bench-" + prefix + "-host");
+          if (hostInput && !hostInput.value.trim()) hostInput.value = item.gateway;
+        }
+      }
+      saveBenchCredentialsToStorage();
+      setDiscoverButtonsDisabled(mode, false);
+    }
+
+    async function resetBench(benchId) {
+      setPortalFeedback("Reiniciando banco " + benchId + "…");
+      const response = await fetch("/api/bench/reset", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token, bench_id: benchId})
+      });
+      const payload = await response.json();
+      if (payload.ok) {
+        clearBenchReadingUi(benchId);
+        if (payload.bench_identities) {
+          paintBenchIdentities(payload.bench_identities);
+        }
+      }
+      setPortalFeedback(payload.ok ? (payload.messages || []).join(" ") : (payload.error || "No se pudo reiniciar."));
+    }
+
+    async function remapLan(benchId) {
+      const label = benchId ? "banco " + benchId + " (LAN" + (benchId === "B" ? "5–LAN8" : "1–LAN4") + ")" : "LAN1–LAN8";
+      if (!confirm("¿Reconfigurar " + label + "? Asigna adaptadores, limpia namespaces y renueva DHCP. La NIC de gestión no se toca.")) return;
+      setPortalFeedback("Reconfigurando " + label + "…");
+      const response = await fetch("/api/ports/remap", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token, bench_id: benchId || ""})
+      });
+      const payload = await response.json();
+      setPortalFeedback(payload.ok ? (payload.messages || []).slice(-4).join(" ") : (payload.error || "Remapeo falló."));
+      if (payload.ok) location.reload();
+    }
+
+    loadBenchCredentialsFromStorage();
+    ensurePanelBoot({panel_boot: serverPanelBoot});
+    if (!document.getElementById("bench-b-profile").value.trim()) {
+      document.getElementById("bench-b-profile").value = document.getElementById("bench-a-profile").value.trim();
+    }
+    document.querySelectorAll(".bench-creds input").forEach((node) => {
+      node.addEventListener("change", saveBenchCredentialsToStorage);
+    });
+    for (const benchId of ["A", "B"]) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const profileInput = document.getElementById("bench-" + prefix + "-profile");
+      if (profileInput) {
+        profileInput.addEventListener("change", () => applyBenchProfile(benchId));
+        profileInput.addEventListener("blur", () => applyBenchProfile(benchId));
+      }
+    }
+    document.getElementById("discover-benches").addEventListener("click", () => discoverBenches("all"));
+    const remapAll = document.getElementById("remap-lan-all");
+    if (remapAll) remapAll.addEventListener("click", () => remapLan(""));
+    document.querySelectorAll("[data-bench-remap]").forEach((node) => {
+      node.addEventListener("click", () => remapLan(node.getAttribute("data-bench-remap")));
+    });
+    document.querySelectorAll("[data-bench-discover]").forEach((node) => {
+      node.addEventListener("click", () => discoverBenches(node.getAttribute("data-bench-discover")));
+    });
+    document.querySelectorAll("[data-bench-reset]").forEach((node) => {
+      node.addEventListener("click", () => resetBench(node.getAttribute("data-bench-reset")));
+    });
+    document.querySelectorAll("[data-bench-save-portal]").forEach((node) => {
+      node.addEventListener("click", () => saveBenchPortalProfile(node.getAttribute("data-bench-save-portal")));
+    });
+    async function ensureBenchReadyForCert(benchId) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const creds = benchCredentialFields(benchId);
+      if (!creds.portal_model || !creds.portal_host || !creds.dut_user || !creds.dut_password) {
+        setPortalFeedback(
+          "Banco " + benchId + ": completa modelo, Portal IP, usuario y contraseña en la tarjeta (Ver contraseña si ya las guardaste)."
+        );
+        return false;
+      }
+      const snLabel = document.getElementById("bench-" + prefix + "-sn");
+      if (snLabel && snLabel.textContent.trim() === "SN —" && !benchIdentityForBench(benchId).serial) {
+        await discoverBenches(benchId);
+      }
+      const id = benchIdentityForBench(benchId);
+      if (!id.serial) {
+        setPortalFeedback("Busca el banco " + benchId + " (1 · Buscar) antes de certificar.");
+        return false;
+      }
+      return true;
+    }
+
+    function applyBenchIdentityForCert(benchId) {
+      const id = benchIdentityForBench(benchId);
+      lastIdentity = {
+        dut_serial: id.serial || "",
+        dut_mac: id.mac || "",
+        dut_brand: id.brand || "",
+        dut_model: id.model || ""
+      };
+      const creds = benchCredentialFields(benchId);
+      if (creds.portal_model) {
+        document.getElementById("portal-model").value = creds.portal_model;
+      }
+      if (creds.portal_host) {
+        document.getElementById("portal-host").value = creds.portal_host;
+      }
+      if (creds.dut_user) {
+        document.getElementById("dut-user").value = creds.dut_user;
+      }
+      if (creds.dut_password) {
+        document.getElementById("dut-password").value = creds.dut_password;
+      }
+    }
+
+    function benchIdentityForBench(benchId) {
+      const direct = benchIdentities[benchId] || {};
+      if (direct.serial) {
+        return direct;
+      }
+      const inv = benchInventories[benchId] || {};
+      if (inv.serial) {
+        benchIdentities[benchId] = Object.assign({}, inv);
+        paintBenchHeader(benchId, inv);
+        return inv;
+      }
+      return direct;
+    }
+
+    async function waitForRunStart(timeoutMs) {
+      const deadline = Date.now() + (timeoutMs || 20000);
+      while (Date.now() < deadline) {
+        const job = await fetch("/api/status").then((response) => response.json());
+        paint(job);
+        if (job.running) {
+          return true;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      }
+      return false;
+    }
+
+    async function waitForRunComplete() {
+      await waitForRunStart();
+      while (true) {
+        const job = await fetch("/api/status").then((response) => response.json());
+        paint(job);
+        if (!job.running) {
+          return job;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    }
+
+    async function certifyBench(benchId, durationSeconds) {
+      if (technologyBlockedForBench(benchId)) {
+        applyTechnologyLock(false);
+        return false;
+      }
+      if (!(await ensureBenchReadyForCert(benchId))) {
+        return false;
+      }
+      applyBenchIdentityForCert(benchId);
+      const module = benchDetectedFamily(benchId) || activePortal || "";
+      if (module === "ont" || module === "emta") {
+        activatePortalModule(module);
+      }
+      duration.value = String(durationSeconds);
+      stage.value = "simultaneous";
+      setPortalFeedback(
+        "Banco " + benchId + ": throughput " + durationSeconds + " s" + (module ? " (" + module.toUpperCase() + ")" : "") + "…"
+      );
+      const started = await startRun({portalModule: module, benchId, credentialBenchId: benchId});
+      if (!started || !started.ok) {
+        const err = (started && started.error) || "No arrancó la corrida. Revisa el mensaje en rojo o el log.";
+        setPortalFeedback(err);
+        return false;
+      }
+      const wait = await waitForRunStart(15000);
+      const fresh = await fetch("/api/status").then((response) => response.json());
+      paint(fresh);
+      if (!fresh.running) {
+        if (showPreflightAbort(fresh)) {
+          return false;
+        }
+        setPortalFeedback(
+          wait
+            ? (fresh.message || started.error || "La corrida terminó al instante. Mira el log en Medición en vivo.")
+            : "No arrancó en 15 s. Revisa credenciales del banco " + benchId + " y pulsa Recuperar namespaces."
+        );
+        return false;
+      }
+      document.querySelector('.nav-item[data-tab="live"]')?.click();
+      showLiveModule();
+      setPortalFeedback("Corriendo banco " + benchId + ". Cronómetro y log en Medición en vivo.");
+      return true;
+    }
+
+    async function certifyBothBenchesParallel(durationSeconds) {
+      for (const benchId of ["A", "B"]) {
+        if (!(await ensureBenchReadyForCert(benchId))) {
+          return false;
+        }
+      }
+      applyBenchIdentityForCert("A");
+      activeCertBenchId = "";
+      duration.value = String(durationSeconds);
+      stage.value = "simultaneous";
+      dualCertQueue = {active: true};
+      const started = await startRun({
+        portalModule: activePortal,
+        benchId: "",
+        credentialBenchId: "A"
+      });
+      if (!started || !started.ok) {
+        dualCertQueue = null;
+        setPortalFeedback(started && started.error ? started.error : "No se pudo iniciar la corrida dual.");
+        return false;
+      }
+      return true;
+    }
+
+    document.querySelectorAll("[data-bench-cert]").forEach((node) => {
+      node.addEventListener("click", async () => {
+        const benchId = node.getAttribute("data-bench-cert");
+        if (technologyBlockedForBench(benchId)) {
+          applyTechnologyLock(false);
+          return;
+        }
+        const chosenDuration = await chooseCertDuration({
+          title: "Duración del throughput · Banco " + benchId,
+          note: "Ventana iperf3 por par LAN. Después arranca la certificación del banco " + benchId + "."
+        });
+        if (!chosenDuration) return;
+        setPortalFeedback("Iniciando certificación banco " + benchId + "…");
+        const ok = await certifyBench(benchId, Number(chosenDuration) || chosenDuration);
+        if (!ok && !String(portalFeedback && portalFeedback.textContent || "").trim()) {
+          setPortalFeedback("No arrancó el banco " + benchId + ". Revisa el mensaje sobre las tarjetas.");
+        }
+      });
+    });
+
+    const certifyBothBtn = document.getElementById("certify-benches-both");
+    if (certifyBothBtn) {
+      certifyBothBtn.addEventListener("click", async () => {
+        if (certifyBothBtn.disabled) return;
+        for (const benchId of ["A", "B"]) {
+          if (!(await ensureBenchReadyForCert(benchId))) {
+            return;
+          }
+        }
+        const chosenDuration = await chooseCertDuration({
+          title: "Duración · throughput simultáneo (8 LAN)",
+          note: "Una sola corrida: iperf3 en paralelo en A (LAN1↔3, LAN2↔4) y B (LAN5↔7, LAN6↔8). El informe TC usa la identidad del banco A; ambos equipos se miden a la vez."
+        });
+        if (!chosenDuration) return;
+        certifyBothBtn.disabled = true;
+        let launched = false;
+        try {
+          setPortalFeedback("Iniciando throughput simultáneo en bancos A y B (8 LAN)…");
+          launched = await certifyBothBenchesParallel(chosenDuration);
+          const fresh = await fetch("/api/status").then((response) => response.json());
+          paint(fresh);
+          if (fresh.running) {
+            launched = true;
+            showLiveModule();
+            setPortalFeedback("Throughput dual en curso. Cronómetro en Medición en vivo; prepara enlace/DHCP ~1–2 min.");
+          } else if (launched) {
+            const wait = await waitForRunStart(12000);
+            const again = await fetch("/api/status").then((response) => response.json());
+            paint(again);
+            if (again.running) {
+              showLiveModule();
+              setPortalFeedback("Throughput dual en curso. Cronómetro en Medición en vivo.");
+            } else {
+              setPortalFeedback(
+                wait
+                  ? "La corrida no quedó en curso. Lee el mensaje bajo Correr o el log."
+                  : (again.message || feedback.textContent || "No arrancó en 12 s. Revisa contraseñas ONT en tarjetas A y B.")
+              );
+            }
+          } else {
+            setPortalFeedback(feedback.textContent || "No se pudo iniciar. Completa usuario/contraseña ONT en A y B.");
+          }
+        } finally {
+          const fresh = await fetch("/api/status").then((response) => response.json());
+          paint(fresh);
+          certifyBothBtn.disabled = Boolean(fresh.running) || !fresh.can_launch;
+          if (!fresh.running) {
+            dualCertQueue = null;
+          }
+        }
+      });
+    }
+
+    function chooseCertDuration(options) {
+      const dialog = document.getElementById("cert-time");
+      const list = document.getElementById("cert-times");
+      const title = document.getElementById("cert-time-title");
+      const note = dialog && dialog.querySelector(".note");
+      const prevTitle = title ? title.textContent : "";
+      const prevNote = note ? note.textContent : "";
+      if (title && options && options.title) title.textContent = options.title;
+      if (note && options && options.note) note.textContent = options.note;
+      list.replaceChildren();
+      const defaultPick = (options && options.defaultSeconds) || "120";
+      let picked = defaultPick;
+      for (const option of duration.options) {
+        const choice = document.createElement("button");
+        choice.type = "button";
+        choice.className = "time-pick" + (option.value === picked ? " active" : "");
+        choice.textContent = option.textContent;
+        choice.addEventListener("click", () => {
+          picked = option.value;
+          list.querySelectorAll(".time-pick").forEach((node) => node.classList.toggle("active", node === choice));
+        });
+        list.appendChild(choice);
+      }
+      dialog.hidden = false;
+      dialog.scrollIntoView({block: "center"});
+      return new Promise((resolve) => {
+        const go = document.getElementById("cert-time-go");
+        const cancel = document.getElementById("cert-time-cancel");
+        const close = (value) => {
+          dialog.hidden = true;
+          if (title) title.textContent = prevTitle || "Duración del throughput";
+          if (note) {
+            note.textContent = prevNote || "Elige cuánto dura cada ventana de la prueba LAN. Después arranca la certificación.";
+          }
+          go.removeEventListener("click", onGo);
+          cancel.removeEventListener("click", onCancel);
+          resolve(value);
+        };
+        const onGo = () => close(picked);
+        const onCancel = () => close(null);
+        go.addEventListener("click", onGo);
+        cancel.addEventListener("click", onCancel);
+      });
+    }
+
+    document.getElementById("start-cert").addEventListener("click", async () => {
+      const start = document.getElementById("start-cert");
+      if (technologyBlocked()) {
+        applyTechnologyLock(false);
+        return;
+      }
+      const chosen = await chooseCertDuration();
+      if (!chosen) return;
+      start.disabled = true;
+      duration.value = chosen;
+      const selected = document.getElementById("portal-model").value.trim();
+      const sameUnit = lastReading && (lastReading.model === selected || lastReading.profile === selected);
+      const emtaReady = activePortal === "emta" && sameUnit && lastReading.serial;
+      const wifiReady = sameUnit && lastReading.serial && lastReading.ssid_24 && lastReading.ssid_50 && lastReading.wifi_password_24 && lastReading.wifi_password_50;
+      const found = (wifiReady || emtaReady) ? lastReading : await runDiscover();
+      if (!(found && found.ok && found.serial)) {
+        const msg = (found && found.error)
+          ? found.error
+          : "No se leyó serie/MAC del equipo. Conecta el módem a una LAN con link, pulsa Buscar y revisa admin/contraseña.";
+        setPortalFeedback(msg);
+        feedback.textContent = msg;
+        start.disabled = Boolean(button.disabled && stop && !stop.disabled);
+        return;
+      }
+      if (technologyBlocked()) {
+        applyTechnologyLock(false);
+        return;
+      }
+      stage.value = "simultaneous";
+      duration.value = chosen;
+      durationState();
+      feedback.textContent = "Lectura lista. Arranca la medición en vivo.";
+      rememberIdentity(found);
+      await startRun({portalModule: activePortal});
+      start.disabled = Boolean(button.disabled && stop && !stop.disabled);
+    });
+    paintReading(null);
+
+    document.getElementById("scrape").addEventListener("click", async () => {
+      const scrape = document.getElementById("scrape");
+      scrape.disabled = true;
+      feedback.textContent = "Entrando al portal…";
+      const response = await fetch("/api/scrape", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          token,
+          portal_model: document.getElementById("portal-model").value.trim(),
+          portal_host: document.getElementById("portal-host").value.trim(),
+          dut_user: document.getElementById("dut-user").value.trim(),
+          dut_password: document.getElementById("dut-password").value
+        })
+      });
+      const found = await response.json();
+      if (found.ok && found.serial) {
+        lastReading = found;
+        showFound(found);
+        paintReading(found);
+        if (technologyBlocked()) {
+          applyTechnologyLock(false);
+          scrape.disabled = Boolean(button.disabled && stop && !stop.disabled);
+          return;
+        }
+        if (found.model) applyDetectedModel(found.model);
+        if (found.gateway) document.getElementById("portal-host").value = found.gateway;
+        document.getElementById("identity-line").textContent = inventoryText(found);
+        rememberIdentity(found);
+        feedback.textContent = found.store_error
+          ? found.store_error
+          : "Datos leídos. Arranca la prueba de 5 min y luego Wi-Fi 5 GHz y 2.4.";
+        lastWifi = {
+          wifi_ssid_24: found.ssid_24 || "",
+          wifi_password_24: found.wifi_password_24 || "",
+          wifi_ssid_50: found.ssid_50 || "",
+          wifi_password_50: found.wifi_password_50 || ""
+        };
+        refreshWifiPlan();
+        stage.value = "simultaneous";
+        duration.value = "300";
+        durationState();
+        await startRun({portalModule: activePortal});
+      } else {
+        if (found.model) applyDetectedModel(found.model);
+        if (found.gateway) document.getElementById("portal-host").value = found.gateway;
+        const where = found.iface ? " por " + found.iface : "";
+        document.getElementById("identity-line").textContent = found.model
+          ? "Equipo detectado: " + found.model + where
+          : "";
+        feedback.textContent = found.error || "No se pudo leer Basic Information.";
+      }
+      scrape.disabled = Boolean(button.disabled && stop && !stop.disabled);
+    });
+
+    const referenceCatalog = {{ (reference_catalog | default([])) | tojson }};
+    const refName = document.getElementById("ref-name");
+    const RULE_OPTIONS = [
+      ["exists", "Debe existir (cualquier valor)"],
+      ["range", "Rango numérico (min … max)"],
+      ["equal", "Igual a este valor"],
+      ["one", "Uno de estos valores (a|b|c)"],
+      ["pattern", "Coincide con patrón"]
+    ];
+    const THROUGHPUT = {section: "QOS / TRÁFICO", title: "Throughput LAN", detail: "Throughput medido en los puertos LAN", path: "qos.throughputMbps", rule: "range", minKey: "throughput_mbps", unit: "Mbps", requiredKey: "throughput", required: true};
+    const READ = "PASS si la lectura trae este dato.";
+    const ONT_RULES = [
+      {section: "LECTURA DEL PORTAL", title: "Marca / modelo", detail: "Marca y modelo leídos del portal", path: "identity.brandModel", rule: "exists", requiredKey: "brand", required: false, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Tecnología", detail: "Tecnología del equipo", path: "identity.technology", rule: "equal", defaultText: "GPON", requiredKey: "gpon", required: false, hint: "El certificado espera GPON."},
+      {section: "LECTURA DEL PORTAL", title: "Número de serie", detail: "Número de serie", path: "identity.serial", rule: "exists", requiredKey: "serial", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Dirección MAC", detail: "Dirección MAC", path: "identity.mac", rule: "exists", requiredKey: "mac", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "IP de gestión", detail: "IP de gestión", path: "identity.mgmtIp", rule: "exists", requiredKey: "mgmt_ip", required: false, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "SSID 2.4 GHz", detail: "Nombre de la red Wi-Fi 2.4 GHz", path: "wifi.ssid24", rule: "exists", requiredKey: "ssid_24", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Clave 2.4 GHz", detail: "Clave de la red Wi-Fi 2.4 GHz", path: "wifi.psk24", rule: "exists", requiredKey: "psk_24", required: true, hint: "La clave leída se imprime en el certificado."},
+      {section: "LECTURA DEL PORTAL", title: "SSID 5 GHz", detail: "Nombre de la red Wi-Fi 5 GHz", path: "wifi.ssid50", rule: "exists", requiredKey: "ssid_50", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Clave 5 GHz", detail: "Clave de la red Wi-Fi 5 GHz", path: "wifi.psk50", rule: "exists", requiredKey: "psk_50", required: false, hint: "La clave leída se imprime en el certificado."},
+      {section: "LECTURA DEL PORTAL", title: "Versión de hardware", detail: "Versión de hardware", path: "system.hardware", rule: "exists", requiredKey: "hardware", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Versión de software", detail: "Versión de software", path: "system.software", rule: "exists", requiredKey: "software", required: true, hint: READ},
+      {section: "ÓPTICA GPON", title: "RX Optical Power", detail: "Potencia óptica RX (ONT)", path: "optics.rxPowerDbm", rule: "range", minKey: "rx_low", maxKey: "rx_high", unit: "dBm", requiredKey: "rx", required: false},
+      {section: "ÓPTICA GPON", title: "TX Optical Power", detail: "Potencia óptica TX (ONT)", path: "optics.txPowerDbm", rule: "range", minKey: "tx_low", maxKey: "tx_high", unit: "dBm", requiredKey: "tx", required: false},
+      {section: "REGLAS DEL MODELO", title: "Working Voltage", detail: "Voltaje de trabajo", path: "optics.voltageMv", rule: "range", minKey: "voltage_low", maxKey: "voltage_high", unit: "mV", requiredKey: "voltage", required: true},
+      {section: "REGLAS DEL MODELO", title: "Bias Current", detail: "Corriente de bias", path: "optics.biasMa", rule: "range", minKey: "bias_low", maxKey: "bias_high", unit: "mA", requiredKey: "bias", required: true},
+      {section: "REGLAS DEL MODELO", title: "Estado ONT", detail: "Estado de la ONT", path: "optics.ontState", rule: "equal", textKey: "ont_state", requiredKey: "ont_state", required: true},
+      {section: "SISTEMA", title: "Working Temperature", detail: "Temperatura interna del equipo", path: "system.tempC", rule: "range", maxKey: "temperature_high", unit: "°C", requiredKey: "temperature", required: false},
+      {section: "QOS / TRÁFICO", title: "Jitter", detail: "Variación del retardo", path: "qos.jitterMs", rule: "range", maxKey: "jitter_ms", unit: "ms", requiredKey: "jitter", required: true},
+      {section: "QOS / TRÁFICO", title: "Packet Loss", detail: "Pérdida de paquetes", path: "qos.lossPercent", rule: "range", maxKey: "loss_percent", unit: "%", requiredKey: "loss", required: true},
+      THROUGHPUT
+    ];
+    const EMTA_RULES = [
+      {section: "LECTURA DEL PORTAL", title: "Dirección MAC", detail: "Dirección MAC", path: "identity.mac", rule: "exists", requiredKey: "mac", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Modelo", detail: "Modelo del equipo", path: "identity.model", rule: "exists", requiredKey: "model_name", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Número de serie", detail: "Número de serie", path: "identity.serial", rule: "exists", requiredKey: "serial", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Versión de hardware", detail: "Versión de hardware", path: "system.hardware", rule: "exists", requiredKey: "hardware", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Versión de software", detail: "Versión de software", path: "system.software", rule: "exists", requiredKey: "software", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Estado DOCSIS", detail: "Estado de acceso DOCSIS", path: "docsis.status", rule: "one", defaultText: "operational|online", requiredKey: "docsis", required: true, hint: "PASS si el estado es operational u online."},
+      {section: "LECTURA DEL PORTAL", title: "SSID 2.4 GHz", detail: "Nombre de la red Wi-Fi 2.4 GHz", path: "wifi.ssid24", rule: "exists", requiredKey: "ssid_24", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Clave 2.4 GHz", detail: "Clave de la red Wi-Fi 2.4 GHz", path: "wifi.psk24", rule: "exists", requiredKey: "psk_24", required: true, hint: "La clave leída se imprime en el certificado."},
+      {section: "LECTURA DEL PORTAL", title: "SSID 5 GHz", detail: "Nombre de la red Wi-Fi 5 GHz", path: "wifi.ssid50", rule: "exists", requiredKey: "ssid_50", required: true, hint: READ},
+      {section: "LECTURA DEL PORTAL", title: "Clave 5 GHz", detail: "Clave de la red Wi-Fi 5 GHz", path: "wifi.psk50", rule: "exists", requiredKey: "psk_50", required: true, hint: "La clave leída se imprime en el certificado."},
+      {section: "RF DOWNSTREAM", title: "Downstream power", detail: "Potencia de los canales de bajada", path: "rf.dsPowerDbmv", rule: "range", minKey: "ds_low", maxKey: "ds_high", unit: "dBmV", requiredKey: "ds", required: true},
+      {section: "RF DOWNSTREAM", title: "Canales downstream", detail: "Cantidad de canales de bajada sintonizados", path: "rf.dsChannels", rule: "range", minKey: "ds_channels_min", unit: "canales", requiredKey: "ds_channels", required: true},
+      {section: "RF DOWNSTREAM", title: "SNR / MER", detail: "Relación señal a ruido de bajada", path: "rf.merDb", rule: "range", minKey: "mer_low", maxKey: "mer_high", unit: "dB", requiredKey: "mer", required: true, hint: "Por encima del máximo también cumple. El certificado muestra la ventana."},
+      {section: "RF DOWNSTREAM", title: "Incorregibles", detail: "Errores incorregibles de bajada", path: "rf.uncorrectables", rule: "range", maxKey: "uncorrectables_max", unit: "", requiredKey: "uncorrectables", required: true},
+      {section: "RF UPSTREAM", title: "Upstream power", detail: "Potencia de los canales de subida", path: "rf.usPowerDbmv", rule: "range", minKey: "us_low", maxKey: "us_high", unit: "dBmV", requiredKey: "us", required: true},
+      {section: "SISTEMA", title: "Working Temperature", detail: "Temperatura interna del equipo", path: "system.tempC", rule: "range", maxKey: "temperature_high", unit: "°C", requiredKey: "temperature", required: false},
+      {section: "QOS / TRÁFICO", title: "Jitter", detail: "Variación del retardo", path: "qos.jitterMs", rule: "range", maxKey: "jitter_ms", unit: "ms", requiredKey: "jitter", required: true},
+      {section: "QOS / TRÁFICO", title: "Packet Loss", detail: "Pérdida de paquetes", path: "qos.lossPercent", rule: "range", maxKey: "loss_percent", unit: "%", requiredKey: "loss", required: true},
+      THROUGHPUT
+    ];
+    function trimNumber(value) {
+      if (value === undefined || value === null || value === "") return "";
+      const number = Number(value);
+      if (!Number.isFinite(number)) return "";
+      return String(number);
+    }
+    function expectedPhrase(card, minValue, maxValue, textValue) {
+      const rule = card.rule;
+      const unit = card.unit ? " " + card.unit : "";
+      if (card.phrase && rule === card.baseRule) return card.phrase;
+      if (rule === "exists") return "Presente";
+      if (rule === "equal") return 'igual a "' + (textValue || "") + '"';
+      if (rule === "one") return "uno de: " + String(textValue || "").split("|").map((item) => item.trim()).filter(Boolean).join(", ");
+      if (rule === "pattern") return "patrón " + (textValue || "");
+      const min = trimNumber(minValue);
+      const max = trimNumber(maxValue);
+      if (min && max) return min + " … " + max + unit;
+      if (max) return "≤ " + max + unit;
+      if (min) return "≥ " + min + unit;
+      return "—";
+    }
+    function paintPreview(card, article) {
+      const min = article.querySelector("[data-bound='min']");
+      const max = article.querySelector("[data-bound='max']");
+      const text = article.querySelector("[data-bound='text']");
+      const select = article.querySelector("select");
+      card.rule = select.value;
+      const phrase = expectedPhrase(card, min && min.value, max && max.value, text && text.value);
+      article.querySelector(".rule-preview b").textContent = phrase;
+      const bounds = article.querySelector(".rule-bounds");
+      const textRow = article.querySelector(".rule-text");
+      const numeric = card.rule === "range";
+      if (bounds) bounds.hidden = !numeric;
+      if (textRow) textRow.hidden = numeric || card.rule === "exists";
+    }
+    function ruleCard(card, item) {
+      const article = document.createElement("article");
+      article.className = "rule-card";
+      article.dataset.requiredKey = card.requiredKey;
+      const savedRule = item.rules && item.rules[card.requiredKey];
+      const active = Object.assign({}, card, {rule: savedRule || card.rule, baseRule: card.rule});
+      const required = item.required && Object.prototype.hasOwnProperty.call(item.required, card.requiredKey)
+        ? Boolean(item.required[card.requiredKey])
+        : card.required;
+      const top = document.createElement("div");
+      top.className = "rule-top";
+      const title = document.createElement("strong");
+      title.textContent = card.title;
+      const excelRow = document.createElement("p");
+      excelRow.className = "rule-excel-row";
+      excelRow.textContent = "Fila Excel · " + card.section + " · " + card.title + " · " + card.path;
+      const check = document.createElement("label");
+      check.className = "check";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.dataset.required = card.requiredKey;
+      box.checked = required;
+      check.append(box, document.createTextNode(" Obligatorio (afecta score)"));
+      top.append(title, check);
+      const grid = document.createElement("div");
+      grid.className = "rule-grid";
+      const read = document.createElement("div");
+      read.className = "rule-read";
+      const readLabel = document.createElement("small");
+      readLabel.textContent = "DATO LEÍDO DEL EQUIPO";
+      const detail = document.createElement("b");
+      detail.textContent = card.detail;
+      const pathLabel = document.createElement("span");
+      pathLabel.textContent = "ORIGEN TÉCNICO (PATH)";
+      const path = document.createElement("code");
+      path.textContent = card.path;
+      read.append(readLabel, detail, pathLabel, path);
+      const versus = document.createElement("div");
+      versus.className = "rule-vs";
+      versus.textContent = "VS";
+      const expect = document.createElement("div");
+      expect.className = "rule-expect";
+      const expectLabel = document.createElement("small");
+      expectLabel.textContent = "QUÉ ESPERO (CRITERIO PASS)";
+      const typeLabel = document.createElement("label");
+      typeLabel.textContent = "TIPO DE REGLA";
+      const select = document.createElement("select");
+      RULE_OPTIONS.forEach((option) => {
+        const node = document.createElement("option");
+        node.value = option[0];
+        node.textContent = option[1];
+        node.selected = option[0] === active.rule;
+        select.append(node);
+      });
+      select.dataset.ruleKey = card.requiredKey;
+      const bounds = document.createElement("div");
+      bounds.className = "rule-bounds";
+      [["min", "MÍNIMO PERMITIDO", "sin mínimo", card.minKey], ["max", "MÁXIMO PERMITIDO", "sin máximo", card.maxKey]].forEach((spec) => {
+        const label = document.createElement("label");
+        label.textContent = spec[1];
+        const input = document.createElement("input");
+        input.type = "number";
+        input.step = "any";
+        input.placeholder = spec[2];
+        input.dataset.bound = spec[0];
+        if (spec[3]) {
+          input.dataset.refKey = spec[3];
+          input.value = trimNumber(item[spec[3]]);
+        } else {
+          input.disabled = true;
+        }
+        label.append(input);
+        bounds.append(label);
+      });
+      const unitLabel = document.createElement("label");
+      unitLabel.textContent = "UNIDAD";
+      const unit = document.createElement("input");
+      unit.value = card.unit || "—";
+      unit.readOnly = true;
+      unitLabel.append(unit);
+      bounds.append(unitLabel);
+      const textRow = document.createElement("label");
+      textRow.className = "rule-text";
+      textRow.textContent = active.rule === "one" ? "VALORES" : (active.rule === "pattern" ? "PATRÓN" : "VALOR");
+      const text = document.createElement("input");
+      text.type = "text";
+      text.dataset.bound = "text";
+      if (card.textKey) {
+        text.dataset.refKey = card.textKey;
+        text.value = item[card.textKey] || card.defaultText || "";
+      } else if (card.defaultText) {
+        text.value = card.defaultText;
+      }
+      textRow.append(text);
+      const preview = document.createElement("p");
+      preview.className = "rule-preview";
+      preview.append(document.createTextNode("EN EL CERTIFICADO DIRÁ ESPERADO = "), document.createElement("b"));
+      expect.append(expectLabel, typeLabel, select, bounds, textRow, preview);
+      grid.append(read, versus, expect);
+      const hint = document.createElement("p");
+      hint.className = "rule-hint";
+      hint.textContent = card.hint || "PASS si el valor leído está entre Min y Max (podés dejar solo Min o solo Max).";
+      article.append(top, excelRow, grid, hint);
+      paintPreview(active, article);
+      article.addEventListener("input", () => paintPreview(active, article));
+      article.addEventListener("change", () => paintPreview(active, article));
+      return article;
+    }
+    function renderRuleHost(host, cards, item) {
+      host.replaceChildren();
+      const groups = [];
+      cards.forEach((card) => {
+        const found = groups.find((group) => group.section === card.section);
+        if (found) found.cards.push(card);
+        else groups.push({section: card.section, cards: [card]});
+      });
+      groups.forEach((group) => {
+        const section = document.createElement("section");
+        section.className = "criterion";
+        const head = document.createElement("div");
+        head.className = "criterion-head";
+        const title = document.createElement("h3");
+        title.textContent = group.section;
+        const count = document.createElement("span");
+        count.textContent = String(group.cards.length);
+        const exportHint = document.createElement("span");
+        exportHint.className = "criterion-export";
+        exportHint.textContent = group.cards.length + " parámetros en Excel";
+        head.append(title, exportHint, count);
+        section.append(head);
+        group.cards.forEach((card) => section.append(ruleCard(card, item)));
+        host.append(section);
+      });
+    }
+    function showReference(name) {
+      const item = referenceCatalog.find((row) => row.name === name) || referenceCatalog[0];
+      if (!item) return;
+      refName.value = item.name;
+      const ont = item.technology === "ONT";
+      const ontHost = document.getElementById("ref-ont");
+      const emtaHost = document.getElementById("ref-emta");
+      ontHost.hidden = !ont;
+      emtaHost.hidden = ont;
+      renderRuleHost(ont ? ontHost : emtaHost, ont ? ONT_RULES : EMTA_RULES, item);
+      const cards = ont ? ONT_RULES : EMTA_RULES;
+      document.getElementById("ref-chosen").textContent =
+        item.technology + " · " + item.technology_label + " · " + item.model + " · " + cards.length + " parámetros";
+      document.querySelectorAll(".ref-pick").forEach((button) => {
+        button.classList.toggle("active", button.dataset.ref === item.name);
+      });
+    }
+    document.querySelectorAll(".ref-pick").forEach((button) => {
+      button.addEventListener("click", () => showReference(button.dataset.ref));
+    });
+    showReference(refName.value);
+
+    document.getElementById("export-reference").addEventListener("click", () => {
+      const name = refName.value.trim();
+      if (!name) return;
+      const url = "/api/reference/export?name=" + encodeURIComponent(name);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = name + "-referencia.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      document.getElementById("reference-line").textContent = "Descarga iniciada: " + name + "-referencia.csv (abre con Excel).";
+    });
+
+    const importRefFile = document.getElementById("import-reference-file");
+    document.getElementById("import-reference-btn").addEventListener("click", () => importRefFile.click());
+    importRefFile.addEventListener("change", async () => {
+      const file = importRefFile.files && importRefFile.files[0];
+      importRefFile.value = "";
+      if (!file) return;
+      const text = await file.text();
+      const response = await fetch("/api/reference/import", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({token, name: refName.value.trim(), csv: text})
+      });
+      const saved = await response.json();
+      if (!saved.ok) {
+        document.getElementById("reference-line").textContent = saved.error || "No se pudo importar.";
+        return;
+      }
+      const row = referenceCatalog.find((item) => item.name === saved.name);
+      if (row) {
+        const fresh = await fetch("/api/status").then((r) => r.json()).catch(() => ({}));
+        if (fresh.bench_map) {
+          /* catalog refresh via reload — simplest */
+        }
+      }
+      document.getElementById("reference-line").textContent = "Perfil importado: " + saved.name + ". Recargando…";
+      location.reload();
+    });
+
+    document.getElementById("save-reference").addEventListener("click", async () => {
+      const item = referenceCatalog.find((row) => row.name === refName.value) || {technology: "ONT"};
+      const values = {technology: item.technology, rules: {}, required: {}};
+      document.querySelectorAll("[data-ref-key]").forEach((input) => {
+        const key = input.dataset.refKey;
+        if (input.dataset.bound === "text") {
+          values[key] = input.value.trim();
+          return;
+        }
+        values[key] = input.value.trim() === "" ? null : Number(input.value);
+      });
+      document.querySelectorAll("[data-rule-key]").forEach((select) => {
+        values.rules[select.dataset.ruleKey] = select.value;
+      });
+      document.querySelectorAll("[data-required]").forEach((box) => {
+        values.required[box.dataset.required] = box.checked;
+      });
+      if (item.technology === "EMTA") {
+        values.ont_state = "";
+        values.mer_min = values.mer_low;
+      }
+      const response = await fetch("/api/reference", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ token, name: refName.value, values })
+      });
+      const saved = await response.json();
+      document.getElementById("reference-line").textContent = saved.ok
+        ? "Referencia guardada: " + saved.name + "."
+        : (saved.error || "No se pudo guardar la referencia.");
+      if (saved.ok) {
+        const row = referenceCatalog.find((item) => item.name === saved.name);
+        if (row) Object.assign(row, values);
+      }
+    });
+
+    function inferPortalBrand(model) {
+      const token = String(model || "").toUpperCase().replace(/\s/g, "");
+      if (token.startsWith("HG") || token.startsWith("HN")) return "HUAWEI";
+      if (token.includes("CGNV")) return "HITRON";
+      if (token.startsWith("CG-") || token === "KAON" || token === "CG3000") return "KAON";
+      return "OTRO";
+    }
+
+    function openSettingsPane(which) {
+      document.querySelectorAll(".settings-pane-tab").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.settingsPane === which);
+      });
+      const refPane = document.getElementById("settings-pane-reference");
+      const portalsPane = document.getElementById("settings-pane-portals");
+      if (refPane) refPane.hidden = which !== "reference";
+      if (portalsPane) portalsPane.hidden = which !== "portals";
+    }
+
+    document.querySelectorAll(".settings-pane-tab").forEach((btn) => {
+      btn.addEventListener("click", () => openSettingsPane(btn.dataset.settingsPane));
+    });
+
+    function portalRowsFromApi(rows) {
+      if (!Array.isArray(rows)) return;
+      portalRows = rows.map((row) => ({
+        brand: row.brand || inferPortalBrand(row.model),
+        model: row.model,
+        host: row.host || "192.168.1.1",
+        username: row.username || "",
+        password: row.password || "",
+        kind: row.kind || ""
+      }));
+    }
+
+    function paintPortalProfilesTable() {
+      const body = document.querySelector("#portal-profiles-table tbody");
+      if (!body) return;
+      const showPassword = Boolean(document.getElementById("portal-profiles-show-password")?.checked);
+      body.replaceChildren();
+      const sorted = [...portalRows].sort((a, b) => String(a.model).localeCompare(String(b.model), "es"));
+      for (const row of sorted) {
+        const tr = document.createElement("tr");
+        tr.dataset.model = row.model;
+        const plainCells = [
+          row.brand || inferPortalBrand(row.model),
+          row.model,
+          row.username || "—",
+          null,
+          row.host || "192.168.1.1"
+        ];
+        for (let i = 0; i < plainCells.length; i += 1) {
+          const td = document.createElement("td");
+          if (i === 3) {
+            td.className = "pw-cell";
+            if (showPassword) {
+              td.textContent = row.password || "—";
+            } else {
+              const visor = document.createElement("span");
+              visor.className = "pw-visor";
+              const masked = document.createElement("span");
+              masked.textContent = "••••••";
+              masked.dataset.role = "masked";
+              const reveal = document.createElement("button");
+              reveal.type = "button";
+              reveal.className = "pw-reveal";
+              reveal.textContent = "Ver";
+              reveal.setAttribute("aria-pressed", "false");
+              reveal.title = "Ver contraseña de este perfil";
+              reveal.addEventListener("click", () => {
+                const open = reveal.getAttribute("aria-pressed") === "true";
+                if (open) {
+                  masked.textContent = "••••••";
+                  reveal.textContent = "Ver";
+                  reveal.setAttribute("aria-pressed", "false");
+                } else {
+                  masked.textContent = row.password || "—";
+                  reveal.textContent = "Ocultar";
+                  reveal.setAttribute("aria-pressed", "true");
+                }
+              });
+              visor.appendChild(masked);
+              visor.appendChild(reveal);
+              td.appendChild(visor);
+            }
+          } else {
+            td.textContent = plainCells[i];
+          }
+          tr.appendChild(td);
+        }
+        const actions = document.createElement("td");
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.textContent = "Editar";
+        edit.addEventListener("click", () => fillPortalProfileForm(row));
+        const del = document.createElement("button");
+        del.type = "button";
+        del.className = "danger";
+        del.textContent = "Quitar";
+        del.addEventListener("click", () => deletePortalProfile(row.model));
+        actions.appendChild(edit);
+        actions.appendChild(document.createTextNode(" "));
+        actions.appendChild(del);
+        tr.appendChild(actions);
+        body.appendChild(tr);
+      }
+    }
+
+    function fillPortalProfileForm(row) {
+      const model = String(row.model || "").trim();
+      document.getElementById("settings-portal-model").value = model;
+      document.getElementById("settings-portal-brand").value = row.brand || inferPortalBrand(model);
+      document.getElementById("settings-portal-host").value = row.host || "192.168.1.1";
+      document.getElementById("settings-portal-user").value = row.username || "";
+      document.getElementById("settings-portal-password").value = row.password || "";
+      const showPw = document.getElementById("settings-portal-show-password");
+      if (showPw) showPw.checked = false;
+      document.getElementById("settings-portal-password").type = "password";
+    }
+
+    function clearPortalProfileForm() {
+      document.getElementById("settings-portal-model").value = "";
+      document.getElementById("settings-portal-brand").value = "—";
+      document.getElementById("settings-portal-host").value = "192.168.1.1";
+      document.getElementById("settings-portal-user").value = "admin";
+      document.getElementById("settings-portal-password").value = "";
+      const showPw = document.getElementById("settings-portal-show-password");
+      if (showPw) showPw.checked = false;
+      document.getElementById("settings-portal-password").type = "password";
+    }
+
+    async function savePortalProfileFromSettings() {
+      const model = document.getElementById("settings-portal-model").value.trim();
+      const host = document.getElementById("settings-portal-host").value.trim();
+      const username = document.getElementById("settings-portal-user").value.trim();
+      const password = document.getElementById("settings-portal-password").value;
+      const line = document.getElementById("portal-profiles-line");
+      if (!model || !host || !username || !password) {
+        if (line) line.textContent = "Completa modelo, portal, usuario y contraseña.";
+        return;
+      }
+      try {
+        const response = await fetch("/api/portal", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token, model, host, username, password})
+        });
+        const saved = await response.json();
+        if (!saved.ok) {
+          if (line) line.textContent = saved.error || "No se pudo guardar.";
+          return;
+        }
+        mergePortalList(saved.portals || []);
+        if (saved.rows) portalRowsFromApi(saved.rows);
+        else portalRowsFromApi(saved.portals);
+        paintPortalProfilesTable();
+        if (line) line.textContent = "Perfil guardado: " + model + ".";
+      } catch (_err) {
+        if (line) line.textContent = "Error de red. Recarga el panel (Ctrl+F5).";
+      }
+    }
+
+    async function deletePortalProfile(model) {
+      const name = String(model || "").trim();
+      if (!name || !window.confirm("¿Quitar el perfil " + name + "?")) return;
+      const line = document.getElementById("portal-profiles-line");
+      try {
+        const response = await fetch("/api/portal", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token, action: "delete", model: name})
+        });
+        const saved = await response.json();
+        if (!saved.ok) {
+          if (line) line.textContent = saved.error || "No se pudo quitar.";
+          return;
+        }
+        mergePortalList(saved.portals || []);
+        portalRowsFromApi(saved.rows || saved.portals);
+        paintPortalProfilesTable();
+        if (line) line.textContent = "Perfil quitado: " + name + ".";
+      } catch (_err) {
+        if (line) line.textContent = "Error de red. Recarga el panel.";
+      }
+    }
+
+    function openPortalProfilesSettings() {
+      document.querySelector('.nav-item[data-tab="settings"]')?.click();
+      openSettingsPane("portals");
+      paintPortalProfilesTable();
+      document.getElementById("settings-pane-portals")?.scrollIntoView({behavior: "smooth", block: "start"});
+    }
+
+    document.getElementById("portal-profile-save")?.addEventListener("click", savePortalProfileFromSettings);
+    document.getElementById("portal-profile-new")?.addEventListener("click", clearPortalProfileForm);
+    document.getElementById("portal-profiles-show-password")?.addEventListener("change", paintPortalProfilesTable);
+    document.getElementById("settings-portal-show-password")?.addEventListener("change", (event) => {
+      const field = document.getElementById("settings-portal-password");
+      if (!field) return;
+      field.type = event.target.checked ? "text" : "password";
+    });
+    document.getElementById("settings-portal-model")?.addEventListener("input", (event) => {
+      const brand = document.getElementById("settings-portal-brand");
+      if (brand) brand.value = inferPortalBrand(event.target.value) || "—";
+    });
+    document.getElementById("goto-portal-profiles")?.addEventListener("click", openPortalProfilesSettings);
+
+    document.getElementById("export-portals")?.addEventListener("click", () => {
+      const link = document.createElement("a");
+      link.href = "/api/portals/export";
+      link.download = "perfiles-portal-techcorp.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      const line = document.getElementById("portal-profiles-line");
+      if (line) line.textContent = "Descarga iniciada: perfiles-portal-techcorp.csv (abre con Excel).";
+    });
+
+    const importPortalsFile = document.getElementById("import-portals-file");
+    document.getElementById("import-portals-btn")?.addEventListener("click", () => importPortalsFile?.click());
+    importPortalsFile?.addEventListener("change", async () => {
+      const file = importPortalsFile.files && importPortalsFile.files[0];
+      importPortalsFile.value = "";
+      if (!file) return;
+      const text = await file.text();
+      const line = document.getElementById("portal-profiles-line");
+      try {
+        const response = await fetch("/api/portals/import", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token, csv: text})
+        });
+        const saved = await response.json();
+        if (!saved.ok) {
+          if (line) line.textContent = saved.error || "No se pudo importar.";
+          return;
+        }
+        mergePortalList(saved.portals || []);
+        portalRowsFromApi(saved.rows || saved.portals);
+        paintPortalProfilesTable();
+        const note = saved.notes && saved.notes.length ? " " + saved.notes.join(" ") : "";
+        if (line) line.textContent = "Importados " + saved.imported + " perfil(es)." + note;
+      } catch (_err) {
+        if (line) line.textContent = "No se pudo importar. Recarga el panel.";
+      }
+    });
+
+    if (!portalRows.length && portals.length) {
+      portalRowsFromApi(portals.map((item) => ({
+        model: item.model,
+        host: item.host,
+        username: item.username,
+        password: item.password
+      })));
+    }
+    paintPortalProfilesTable();
+
+    function mergePortalList(rows) {
+      if (!Array.isArray(rows)) return;
+      for (const row of rows) {
+        const index = portals.findIndex((item) => item.model === row.model);
+        if (index >= 0) portals[index] = row;
+        else portals.push(row);
+      }
+      const list = document.getElementById("portal-models");
+      if (list) {
+        list.replaceChildren();
+        for (const item of portals) {
+          const option = document.createElement("option");
+          option.value = item.model;
+          list.appendChild(option);
+        }
+      }
+      portalRowsFromApi(rows);
+      paintPortalProfilesTable();
+    }
+
+    document.getElementById("save-portal").addEventListener("click", async () => {
+      const model = document.getElementById("portal-model").value.trim();
+      const host = document.getElementById("portal-host").value.trim();
+      const username = document.getElementById("dut-user").value.trim();
+      const password = document.getElementById("dut-password").value;
+      if (!model || !host || !username || !password) {
+        const missing = "Completa modelo, dirección, usuario y contraseña antes de guardar.";
+        setPortalFeedback(missing);
+        feedback.textContent = missing;
+        return;
+      }
+      setPortalFeedback("Guardando perfil…");
+      let saved;
+      try {
+        const response = await fetch("/api/portal", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({ token, model, host, username, password })
+        });
+        saved = await response.json();
+      } catch (error) {
+        const message = "No se pudo contactar al panel. Recarga la página (Ctrl+F5) e intenta otra vez.";
+        setPortalFeedback(message);
+        feedback.textContent = message;
+        return;
+      }
+      const message = saved.ok
+        ? "Perfil guardado para " + saved.model + ". Pulsa Buscar para leer el equipo."
+        : (saved.error || "No se pudo guardar el perfil.");
+      setPortalFeedback(message);
+      feedback.textContent = message;
+      if (saved.ok) {
+        mergePortalList(saved.portals);
+        if (saved.rows) portalRowsFromApi(saved.rows);
+        document.getElementById("summary-name").textContent = model;
+        document.getElementById("summary-host").textContent = host;
+      }
+    });
+
+    setInterval(tick, 250);
+    setInterval(async () => {
+      const response = await fetch("/api/status");
+      paint(await response.json());
+    }, 500);
+    fetch("/api/status").then((response) => response.json()).then(paint);
+  </script>
+</body>
+</html>

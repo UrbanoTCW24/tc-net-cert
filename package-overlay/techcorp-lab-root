@@ -1,0 +1,183 @@
+#!/bin/bash
+# Root helper for TECHCORP LAB. sudoers allows only this program, without a password.
+set -euo pipefail
+
+PREFIX="${PREFIX:-/opt/tc-net-cert}"
+PYTHON="${PREFIX}/venv/bin/python3"
+export PYTHONUNBUFFERED=1
+if [[ -f /root/.config/tc-net-cert/supabase.env ]]; then
+  export TC_NET_CERT_SUPABASE=/root/.config/tc-net-cert/supabase.env
+fi
+
+die() {
+  echo "techcorp-lab-root: $*" >&2
+  exit 2
+}
+
+[[ -x "${PYTHON}" ]] || die "falta la aplicación"
+
+cmd="${1:-}"
+shift || true
+
+case "${cmd}" in
+  test)
+    config=""
+    stage=""
+    duration=""
+    envfile=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --config)
+          config="${2:-}"
+          shift 2
+          ;;
+        --stage)
+          stage="${2:-}"
+          shift 2
+          ;;
+        --duration)
+          duration="${2:-}"
+          shift 2
+          ;;
+        --env-file)
+          envfile="${2:-}"
+          shift 2
+          ;;
+        *)
+          die "argumento no permitido"
+          ;;
+      esac
+    done
+    case "${stage}" in
+      all|throughput|dhcp|physical|cross|simultaneous|wifi|bidirectional) ;;
+      *) die "prueba no reconocida" ;;
+    esac
+    case "${config}" in
+      /etc/tc-net-cert/*.yaml|/home/*/.config/tc-net-cert/*.yaml) ;;
+      *) die "configuración no permitida" ;;
+    esac
+    [[ -f "${config}" ]] || die "no está el archivo de configuración"
+    args=(--config "${config}" test "${stage}")
+    if [[ -n "${duration}" ]]; then
+      case "${duration}" in
+        30|60|120|300|600|1800|3600|7200) ;;
+        *) die "duración no permitida" ;;
+      esac
+      args+=(--duration "${duration}")
+    fi
+    if [[ -n "${envfile}" ]]; then
+      case "${envfile}" in
+        /home/*/.local/state/tc-net-cert/launch.env.json|/root/.local/state/tc-net-cert/launch.env.json) ;;
+        *) die "archivo de entorno no permitido" ;;
+      esac
+      [[ -f "${envfile}" ]] || die "falta el entorno de la prueba"
+      owner="$(stat -c %u "${envfile}")"
+      mode="$(stat -c %a "${envfile}")"
+      [[ "${owner}" == "${SUDO_UID:-}" && "${mode}" == "600" ]] || die "entorno no permitido"
+      exec "${PYTHON}" - "${envfile}" "${config}" "${stage}" "${duration}" << 'PY'
+import json, os, sys
+envfile, config, stage, duration = sys.argv[1:5]
+allowed = {
+    "TC_NET_CERT_DUT_USER",
+    "TC_NET_CERT_DUT_PASSWORD",
+    "TC_NET_CERT_DUT_HOST",
+    "TC_NET_CERT_DUT_SERIAL",
+    "TC_NET_CERT_DUT_MAC",
+    "TC_NET_CERT_DUT_BRAND",
+    "TC_NET_CERT_DUT_MODEL",
+    "TC_NET_CERT_PORTALS",
+    "TC_NET_CERT_SUPABASE",
+    "TC_NET_CERT_WIFI_SSID_24",
+    "TC_NET_CERT_WIFI_PSK_24",
+    "TC_NET_CERT_WIFI_SSID_50",
+    "TC_NET_CERT_WIFI_PSK_50",
+    "TC_NET_CERT_WIFI_READING",
+    "TC_NET_CERT_BENCH_ID",
+    "TC_NET_CERT_BENCH_PORTS",
+}
+data = json.loads(open(envfile, encoding="utf-8").read())
+try:
+    os.remove(envfile)
+except OSError:
+    pass
+env = os.environ.copy()
+for key in allowed:
+    value = data.get(key)
+    if isinstance(value, str) and value:
+        env[key] = value
+env.pop("PYTHONPATH", None)
+env["PYTHONUNBUFFERED"] = "1"
+python = "/opt/tc-net-cert/venv/bin/python3"
+args = [python, "-m", "tc_net_cert", "--config", config, "test", stage]
+if duration:
+    args += ["--duration", duration]
+os.execve(python, args, env)
+PY
+    fi
+    exec "${PYTHON}" -m tc_net_cert "${args[@]}"
+    ;;
+  signal)
+    sig="${1:-}"
+    shift || true
+    [[ "${sig}" == "INT" || "${sig}" == "TERM" ]] || die "señal no permitida"
+    [[ $# -ge 1 ]] || die "falta el proceso"
+    for pid in "$@"; do
+      [[ "${pid}" =~ ^[0-9]+$ ]] || die "proceso no válido"
+      [[ -r "/proc/${pid}/cmdline" ]] || die "el proceso ya no existe"
+      text="$(tr '\0' ' ' < "/proc/${pid}/cmdline")"
+      [[ "${text}" == *tc-net-cert* || "${text}" == *tc_net_cert* || "${text}" == *iperf3* ]] || die "ese proceso no es de la prueba"
+    done
+    exec kill "-${sig}" "$@"
+    ;;
+  link)
+    iface="${1:-}"
+    verb="${2:-}"
+    [[ "${iface}" =~ ^[A-Za-z][A-Za-z0-9._-]{0,15}$ ]] || die "interfaz no válida"
+    [[ "${verb}" == "up" || "${verb}" == "down" ]] || die "acción no permitida"
+    sysfs="/sys/class/net/${iface}"
+    [[ -e "${sysfs}/wireless" || -e "${sysfs}/phy80211" ]] || die "la interfaz no es Wi-Fi"
+    exec ip link set "${iface}" "${verb}"
+    ;;
+  bench-reset)
+    bench="${1:-}"
+    config="${2:-/etc/tc-net-cert/config.yaml}"
+    [[ "${bench}" == "A" || "${bench}" == "B" ]] || die "banco no válido"
+    case "${config}" in
+      /etc/tc-net-cert/*.yaml|/home/*/.config/tc-net-cert/*.yaml) ;;
+      *) die "configuración no permitida" ;;
+    esac
+    [[ -f "${config}" ]] || die "no está el archivo de configuración"
+    exec "${PYTHON}" - "${bench}" "${config}" << 'PY'
+import sys
+from pathlib import Path
+from tc_net_cert.core.executor import SystemExecutor
+from tc_net_cert.orchestration.bench_recover import recover_bench
+bench, config = sys.argv[1:3]
+for line in recover_bench(SystemExecutor(), bench, config_path=Path(config)):
+    print(line)
+PY
+    ;;
+  ports-remap)
+    config="${1:-/etc/tc-net-cert/config.yaml}"
+    case "${config}" in
+      /etc/tc-net-cert/*.yaml|/home/*/.config/tc-net-cert/*.yaml) ;;
+      *) die "configuración no permitida" ;;
+    esac
+    [[ -f "${config}" ]] || die "no está el archivo de configuración"
+    exec "${PYTHON}" -m tc_net_cert.config.station_ports --config "${config}" --yes
+    ;;
+  ports-remap-bench)
+    bench="${1:-}"
+    config="${2:-/etc/tc-net-cert/config.yaml}"
+    [[ "${bench}" == "A" || "${bench}" == "B" ]] || die "banco no válido"
+    case "${config}" in
+      /etc/tc-net-cert/*.yaml|/home/*/.config/tc-net-cert/*.yaml) ;;
+      *) die "configuración no permitida" ;;
+    esac
+    [[ -f "${config}" ]] || die "no está el archivo de configuración"
+    exec "${PYTHON}" -m tc_net_cert.config.station_ports --config "${config}" --bench "${bench}" --yes
+    ;;
+  *)
+    die "comando no permitido"
+    ;;
+esac
