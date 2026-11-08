@@ -143,7 +143,9 @@ fi
 
 if [[ "${CHECK_GITHUB}" == "1" ]] && command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   tmp="$(mktemp)"
-  if curl -fsSL --connect-timeout 8 --max-time 20 -o "${tmp}" "${MANIFEST_URL}" 2>/dev/null; then
+  # raw.githubusercontent.com cachea agresivamente; ?ref=main evita manifest stale 1.2.0 tras push 1.3.0.
+  remote_url="${MANIFEST_URL}?$(date +%s)"
+  if curl -fsSL --connect-timeout 8 --max-time 20 -H 'Cache-Control: no-cache' -o "${tmp}" "${remote_url}" 2>/dev/null; then
     REMOTE_VER="$(jq -r '.version // ""' "${tmp}")"
     if [[ -n "${REMOTE_VER}" ]]; then
       if version_gt "${REMOTE_VER}" "${VER}"; then
