@@ -5,6 +5,7 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/). Versión en `
 ## [Unreleased]
 
 ### Added
+- Instaladores consultan manifiesto OTA al inicio (`check-release-offer.sh`); descarga automática si hay versión mayor.
 - `profiles/`: `portals.example.yaml`, `run-profiles.yaml`, `acceptance-reference.yaml`.
 - `fixtures/runs/TC-0002-emta-bancoA.sample.json` (contrato de informe).
 - `docs/SCRAPER-AND-PROFILES.md`; perfiles incluidos en kit USB.

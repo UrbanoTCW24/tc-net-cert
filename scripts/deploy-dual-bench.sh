@@ -8,6 +8,8 @@ DEST="/opt/tc-net-cert/venv/lib/python3.14/site-packages/tc_net_cert"
 sudo rsync -a --no-owner --no-group --exclude '__pycache__' "${OVERLAY}/" "${DEST}/"
 sudo install -d /opt/tc-net-cert/scripts
 sudo install -m 755 "${ROOT}/scripts/apply-update.sh" /opt/tc-net-cert/scripts/apply-update.sh
+sudo install -m 755 "${ROOT}/scripts/check-release-offer.sh" /opt/tc-net-cert/scripts/check-release-offer.sh
+sudo install -m 755 "${ROOT}/scripts/download-release-wheel.sh" /opt/tc-net-cert/scripts/download-release-wheel.sh
 sudo cp "${ROOT}/package-overlay/techcorp-lab-root" /usr/local/sbin/techcorp-lab-root
 sudo chmod 755 /usr/local/sbin/techcorp-lab-root
 echo "Desplegado. Versión:"

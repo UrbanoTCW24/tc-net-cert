@@ -22,9 +22,41 @@ apt-get install -y --no-install-recommends \
 
 mkdir -p "${PREFIX}/scripts" "${PREFIX}/bin" /etc/tc-net-cert /var/lib/tc-net-cert
 install -m 755 "${KIT_ROOT}/scripts/apply-update.sh" "${PREFIX}/scripts/apply-update.sh"
+install -m 755 "${KIT_ROOT}/scripts/check-release-offer.sh" "${PREFIX}/scripts/check-release-offer.sh"
+install -m 755 "${KIT_ROOT}/scripts/download-release-wheel.sh" "${PREFIX}/scripts/download-release-wheel.sh"
 
 WHL="$(ls -1 "${KIT_ROOT}"/tc_net_cert-*.whl 2>/dev/null | sort -V | tail -1)"
 [[ -n "${WHL}" && -f "${WHL}" ]] || die "No se encontró tc_net_cert-*.whl en ${KIT_ROOT}"
+
+# Comprobar mejora publicada (GitHub fleet-manifest) antes de instalar el wheel del kit.
+# TC_NET_CERT_AUTO_UPDATE=1 → descarga el wheel remoto si es más nuevo que el USB.
+# TC_NET_CERT_SKIP_UPDATE_CHECK=1 → omite la consulta (offline puro).
+# shellcheck source=/dev/null
+source "${KIT_ROOT}/scripts/check-release-offer.sh"
+export TC_NET_CERT_KIT_WHL="${WHL}"
+export TC_NET_CERT_VENV="${VENV}"
+check_release_offer || true
+if [[ "${TC_NET_CERT_UPDATE_AVAILABLE:-0}" == "1" ]]; then
+    if [[ "${TC_NET_CERT_UPDATE_MANDATORY:-0}" == "1" ]]; then
+        log "Actualización obligatoria en catálogo: ${TC_NET_CERT_UPDATE_VERSION}"
+        TC_NET_CERT_AUTO_UPDATE="${TC_NET_CERT_AUTO_UPDATE:-1}"
+    fi
+    if [[ "${TC_NET_CERT_AUTO_UPDATE:-1}" == "1" && -n "${TC_NET_CERT_UPDATE_URL}" ]]; then
+        REMOTE_WHL="${TMPDIR:-/tmp}/tc_net_cert-${TC_NET_CERT_UPDATE_VERSION}.whl"
+        log "Descargando mejora ${TC_NET_CERT_UPDATE_VERSION}…"
+        if bash "${KIT_ROOT}/scripts/download-release-wheel.sh" \
+            "${TC_NET_CERT_UPDATE_URL}" \
+            "${TC_NET_CERT_UPDATE_SHA256}" \
+            "${REMOTE_WHL}"; then
+            WHL="${REMOTE_WHL}"
+            log "Se instalará wheel remoto: $(basename "${WHL}")"
+        else
+            log "No se pudo verificar el wheel remoto; se usa el del kit USB."
+        fi
+    else
+        log "Para aplicar la mejora: TC_NET_CERT_AUTO_UPDATE=1 sudo bash install-station.sh"
+    fi
+fi
 
 if [[ ! -x "${VENV}/bin/python3" ]]; then
     log "Creando venv en ${VENV}"

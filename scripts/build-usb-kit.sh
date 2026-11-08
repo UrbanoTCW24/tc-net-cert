@@ -40,6 +40,9 @@ PY
 
 mkdir -p "${OUT}/scripts"
 cp -a "${ROOT}/scripts/apply-update.sh" "${OUT}/scripts/apply-update.sh"
+cp -a "${ROOT}/scripts/check-release-offer.sh" "${OUT}/scripts/check-release-offer.sh"
+cp -a "${ROOT}/scripts/download-release-wheel.sh" "${OUT}/scripts/download-release-wheel.sh"
+cp -a "${ROOT}/release/fleet-manifest.json" "${OUT}/release/fleet-manifest.json" 2>/dev/null || true
 
 cp -a "${ROOT}/provision/install-station.sh" "${OUT}/provision/"
 cp -a "${ROOT}/provision/actualizar-offline.sh" "${OUT}/provision/"

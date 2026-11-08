@@ -59,6 +59,26 @@ Todas las estaciones con Postgres/Storage configurado leen la fila activa del ca
 
 Copie `dist_usb/` del release a cada lab → `sudo bash provision/actualizar-offline.sh`.
 
+**Desde v1.2+**, ambos instaladores consultan al iniciar si hay mejora publicada:
+
+| Script | Comportamiento |
+|--------|----------------|
+| `provision/install-station.sh` | Lee `release/fleet-manifest.json` en GitHub (URL configurable) |
+| `provision/actualizar-offline.sh` | Igual; si hay versión mayor, descarga el `.whl` (por defecto `AUTO_UPDATE=1`) |
+
+Variables:
+
+```bash
+# Manifiesto (una URL para toda la flota)
+export TC_NET_CERT_RELEASE_MANIFEST_URL="https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/release/fleet-manifest.json"
+# Offline puro en USB sin Internet
+export TC_NET_CERT_SKIP_UPDATE_CHECK=1
+# Solo avisar, no descargar
+export TC_NET_CERT_AUTO_UPDATE=0
+```
+
+Sin Internet el instalador sigue con el wheel de la USB.
+
 ## Flujo de trabajo del mantenedor
 
 ```text
