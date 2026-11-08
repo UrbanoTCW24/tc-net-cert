@@ -445,6 +445,7 @@ class StationCleanup(BaseModel):
 class CertificationReport(BaseModel):
     title: str
     run_id: str
+    validation_number: str = ""
     tool_version: str
     schema_version: str
     config_hash: str

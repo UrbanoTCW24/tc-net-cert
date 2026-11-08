@@ -125,13 +125,11 @@ def serve(
     monitor = TrafficMonitor()
     try:
         boot_config, _ = load_config(config_path or Path("/etc/tc-net-cert/config.yaml"))
-        from tc_net_cert.config.remote_sync import sync_profiles_background
+        from tc_net_cert.config.station_provision import cloud_bootstrap_background
         from tc_net_cert.storage.supabase_runs import config_path as supabase_env_path
 
-        from tc_net_cert.config.release_sync import check_release_background
-
-        sync_profiles_background(boot_config.station, env_path=supabase_env_path())
-        check_release_background(supabase_env_path())
+        cfg_path = config_path or Path("/etc/tc-net-cert/config.yaml")
+        cloud_bootstrap_background(cfg_path, supabase_env_path())
     except Exception:
         pass
     handler = _handler(root, console, token, monitor)
@@ -264,8 +262,39 @@ def _handler(
                     return
                 config, _ports = self._station_view()
                 from tc_net_cert.config.remote_sync import profile_sync_status
+                from tc_net_cert.config.station_provision import station_registry_status
+                from tc_net_cert.config.tool_registry import tool_identity_status
 
-                self._json(200, {"ok": True, **profile_sync_status(config.station), "app_version": __version__})
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        **profile_sync_status(config.station),
+                        "station_registry": station_registry_status(),
+                        "tool_identity": tool_identity_status(),
+                        "app_version": __version__,
+                    },
+                )
+                return
+            if path == "/api/tool/identity":
+                if not _local_request(self):
+                    self._json(403, {"ok": False, "error": "Solo se aceptan peticiones locales."})
+                    return
+                from tc_net_cert.config.tool_registry import tool_identity_status
+                from tc_net_cert.storage.supabase_runs import config_path as supabase_env_path
+
+                config, _ports = self._station_view()
+                cached = tool_identity_status()
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        **cached,
+                        "config_station": config.station or "",
+                        "management_mac_configured": bool(config.management_mac),
+                        "supabase_configured": supabase_env_path().is_file(),
+                    },
+                )
                 return
             if path == "/api/log":
                 if not _local_request(self):
@@ -378,6 +407,7 @@ def _handler(
                 "/api/reference/import",
                 "/api/sync",
                 "/api/profiles/sync",
+                "/api/tool/identity",
                 "/api/system/update",
                 "/api/system/update/check",
             }:
@@ -792,6 +822,19 @@ def _handler(
                 result = sync_profiles(country_code=country, station=config.station, env_path=supabase_env_path())
                 self._json(200 if result.get("ok") else 409, {"ok": bool(result.get("ok")), **result})
                 return
+            if path == "/api/tool/identity":
+                from tc_net_cert.config.remote_sync import get_or_register_tool_identity, resolve_country_code
+                from tc_net_cert.storage.supabase_runs import config_path as supabase_env_path
+
+                result = get_or_register_tool_identity(
+                    station_id=config.station,
+                    country_code=resolve_country_code(config.station),
+                    installed_version=__version__,
+                    mac_host=config.management_mac,
+                    env_path=supabase_env_path(),
+                )
+                self._json(200 if result.get("ok") else 409, result)
+                return
             if path == "/api/system/update/check":
                 from tc_net_cert.config.release_sync import sync_release_offer
                 from tc_net_cert.storage.supabase_runs import config_path as supabase_env_path
@@ -905,6 +948,9 @@ def _handler(
             country = resolve_country_code(config.station)
             portals = merge_portals_with_remote(portals, country_code=country, station=config.station)
             profiles_meta = profile_sync_status(config.station)
+            from tc_net_cert.config.tool_registry import tool_identity_status
+
+            tool_meta = tool_identity_status()
             measured = str(((report or {}).get("dut") or {}).get("model") or "")
             hitron_model = config.dut.model in {"CGNV5", "CGNV5CLR"}
             kaon_model = config.dut.model in {"", "Kaon", "KAON", "CG-2200", "CG-3000", "CG3000"}
@@ -959,6 +1005,8 @@ def _handler(
                 reference=_active_reference(config),
                 app_version=__version__,
                 profiles_meta=profiles_meta,
+                tool_number=tool_meta.get("tool_number") or "",
+                tool_version=tool_meta.get("tool_version") or __version__,
                 reference_catalog=profile_catalog(),
             )
             data = body.encode("utf-8")
@@ -1280,6 +1328,12 @@ def _catalog_verdict_for_bench(report: dict, bench_id: str) -> str:
     return str(report.get("global_verdict") or "EN CURSO")
 
 
+def _run_stored_in_cloud(run_id: str, report: dict, stored: set[str]) -> bool:
+    from tc_net_cert.storage.runs import run_synced_in_cloud
+
+    return run_synced_in_cloud(run_id, report, stored)
+
+
 def _catalog(root: Path, stored: set[str] | None = None) -> list[dict]:
     from tc_net_cert.storage.runs import find_run, list_archived_reports
 
@@ -1534,7 +1588,12 @@ def _catalog_row(
         "job": report.get("job") or "",
         "started_at": human_clock(str(report.get("started_at_local") or "")),
         "has_report": True,
-        "stored": None if stored is None else run_id in stored,
+        "stored": (
+            None
+            if stored is None
+            else _run_stored_in_cloud(run_id, report, stored)
+        ),
+        "validation_number": str(report.get("validation_number") or ""),
         "archived": archived,
         "measurement": measurement if archived else "",
         "sort_key": sort_key,

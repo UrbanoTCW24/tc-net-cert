@@ -4,6 +4,8 @@
 schema_version: "1.0.0"
 safe_mode: true
 operator: "OPERADOR"
+# Debe ser único por PC (evita duplicados en Supabase): LAB-002, LAB-CR-01, …
+# Instalador: TC_NET_CERT_STATION=LAB-002 sudo bash install-station.sh
 station: "LAB-XX"
 runs_dir: ""
 report_title: "Ethernet Port Performance & Functional Certification"

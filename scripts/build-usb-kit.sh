@@ -8,7 +8,12 @@ BUILD_DIR="${ROOT}/dist"
 
 log() { printf '[build-usb-kit] %s\n' "$*"; }
 
-rm -rf "${OUT}"
+if [[ -d "${OUT}" ]]; then
+  if ! rm -rf "${OUT}" 2>/dev/null; then
+    log "dist_usb con archivos root/sandbox; limpiando con sudo…"
+    sudo rm -rf "${OUT}"
+  fi
+fi
 mkdir -p "${OUT}/provision" "${BUILD_DIR}"
 
 BUILD_VENV="${ROOT}/.build-venv"
@@ -105,6 +110,23 @@ Forzar plantilla 4 u 8 LAN:
 SAFE MODE: mantener safe_mode: true — no mover la interfaz de gestión a namespaces.
 EOF
 
+INSTALL_TAR="${BUILD_DIR}/tc-net-cert-install-${VER}.tar.gz"
+tar -czf "${INSTALL_TAR}" -C "${OUT}" .
+cp -a "${INSTALL_TAR}" "${OUT}/"
+INSTALL_URL="https://github.com/UrbanoTCW24/tc-net-cert/releases/download/v${VER}/$(basename "${INSTALL_TAR}")"
+
+cat >>"${OUT}/LEEME-USB.txt" <<EOF
+
+Instalación en otra PC con Internet (sin USB):
+  curl -fsSL https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/scripts/install-online.sh | sudo bash
+
+O descargar kit ${VER} y ejecutar:
+  curl -fsSL -o kit.tar.gz "${INSTALL_URL}"
+  sudo mkdir -p /tmp/tc-kit && sudo tar -xzf kit.tar.gz -C /tmp/tc-kit
+  sudo bash /tmp/tc-kit/provision/install-station.sh
+EOF
+
 log "Kit listo: ${OUT}"
 log "Wheel: ${BASENAME} (${VER})"
+log "Instalador tar: ${INSTALL_TAR}"
 log "Copie dist_usb/ a la USB (ej. /media/usb/TECHCORP-LAB-ubuntu/)"

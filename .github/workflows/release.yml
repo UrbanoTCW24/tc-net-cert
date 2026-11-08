@@ -78,9 +78,11 @@ jobs:
           generate_release_notes: true
           files: |
             dist_usb/tc_net_cert-${{ steps.meta.outputs.version }}-py3-none-any.whl
+            dist_usb/tc-net-cert-install-${{ steps.meta.outputs.version }}.tar.gz
             dist_usb/update_offer.json
             dist_usb/version.json
             release/fleet-manifest.json
+            scripts/install-online.sh
 
       - name: Publish wheel to Supabase (opcional HQ)
         env:

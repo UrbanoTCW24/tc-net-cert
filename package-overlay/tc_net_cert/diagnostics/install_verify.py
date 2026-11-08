@@ -220,6 +220,7 @@ def _check_local_storage(config_path: Path) -> CheckLine:
 
 
 def _check_supabase() -> CheckLine:
+    from tc_net_cert.config.station_provision import station_registry_status
     from tc_net_cert.storage.supabase_runs import _settings_error, config_path, listed_run_ids
 
     path = config_path()
@@ -231,7 +232,9 @@ def _check_supabase() -> CheckLine:
     listed = listed_run_ids(path)
     if listed is None:
         return CheckLine("WARN", "Supabase", "credenciales presentes pero no hay conexión ahora")
-    return CheckLine("PASS", "Supabase", "conexión OK")
+    reg = station_registry_status()
+    suffix = f"; estación {reg['station_code']}" if reg.get("station_code") else ""
+    return CheckLine("PASS", "Supabase", f"conexión OK{suffix}")
 
 
 def _check_certification_pending() -> CheckLine:

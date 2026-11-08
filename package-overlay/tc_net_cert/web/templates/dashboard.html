@@ -34,6 +34,7 @@
     header.topbar p { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.75rem; }
     .badges { display: flex; gap: 0.6rem; align-items: center; font-size: 0.75rem; }
     .pill { padding: 0.25rem 0.6rem; border: 1px solid var(--line); border-radius: 999px; background: #f8fafc; }
+    .pill.muted-pill { color: var(--muted); background: #f1f5f9; }
     .sync-rules-btn { font-size: 0.72rem; padding: 0.25rem 0.55rem; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; color: #334155; }
     .sync-rules-btn:disabled { opacity: 0.55; cursor: wait; }
     .update-pill.pending { border-color: #f59e0b; color: #b45309; background: #fffbeb; }
@@ -297,6 +298,11 @@
         <button type="button" id="btn-sync-profiles" class="sync-rules-btn" title="Actualizar reglas DUT desde Supabase">Sincronizar reglas</button>
         <span id="profiles-sync-pill" class="pill" title="Perfiles en caché local">{{ profiles_meta.count | default(0) }} reglas</span>
         <span id="pkg-version" class="pill" title="Versión del software">v{{ app_version }}</span>
+        {% if tool_number %}
+        <span id="tool-id-pill" class="pill" title="Herramienta certificadora en Supabase">ID {{ tool_number }}</span>
+        {% else %}
+        <span id="tool-id-pill" class="pill muted-pill" title="Registre la herramienta (Supabase)">ID herramienta: —</span>
+        {% endif %}
         <button type="button" id="btn-check-update" class="update-check-btn" title="Buscar versión en Supabase">Buscar actualización</button>
         <button type="button" id="btn-apply-update" class="update-apply-btn" hidden title="Instalar wheel publicado">Actualizar software</button>
         <span id="update-pill" class="pill update-pill" hidden title="Actualización disponible"></span>
@@ -717,7 +723,13 @@
         <tbody>
           {% for run in runs %}
           <tr data-sn="{{ run.search }}" data-run="{{ run.run_id }}">
-            <td><a href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">{{ run.run_id }}</a> <a class="pdf-btn" href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">PDF</a></td>
+            <td>
+              <a href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">{{ run.run_id }}</a>
+              <a class="pdf-btn" href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">PDF</a>
+              {% if run.validation_number and run.validation_number != run.run_id %}
+              <div class="meta-line">{{ run.validation_number }}</div>
+              {% endif %}
+            </td>
             <td>{{ run.bench_label or "—" }}</td>
             <td>{{ run.serial or "—" }}</td>
             <td>{{ run.mac or "—" }}</td>
@@ -1413,6 +1425,13 @@
       pdf.rel = "noopener";
       pdf.textContent = "PDF";
       order.append(link, document.createTextNode(" "), pdf);
+      const cloudId = String(run.validation_number || "").trim();
+      if (cloudId && cloudId !== runId) {
+        const meta = document.createElement("div");
+        meta.className = "meta-line";
+        meta.textContent = cloudId;
+        order.append(meta);
+      }
       if (run.archived) {
         const tag = document.createElement("span");
         tag.className = "group-count";

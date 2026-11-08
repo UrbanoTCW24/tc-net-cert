@@ -12,6 +12,14 @@ Estación **TECHCORP LAB** — certificación Ethernet (iperf3, bancos A/B, port
 
 Release actual: **[v1.2.0](https://github.com/UrbanoTCW24/tc-net-cert/releases/tag/v1.2.0)**
 
+### Instalar en otra PC (enlace)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/scripts/install-online.sh | sudo bash
+```
+
+Guía completa: [docs/INSTALL-ONLINE.md](docs/INSTALL-ONLINE.md)
+
 ## DUT piloto en LAB-002
 
 | Campo | Valor (ejemplo banco A) |

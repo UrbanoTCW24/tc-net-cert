@@ -264,6 +264,27 @@ def merge_portals_with_remote(portals: dict, *, country_code: str = "", station:
     return out
 
 
+def get_or_register_tool_identity(
+    *,
+    station_id: str = "",
+    country_code: str = "",
+    installed_version: str = "",
+    mac_host: str = "",
+    env_path: Path | None = None,
+) -> dict:
+    """Registra TOOL-NNN en Supabase y persiste /var/lib/tc-net-cert/tool_identity.json."""
+    from tc_net_cert.config.tool_registry import get_or_register_tool_identity as _register
+
+    country = (country_code or resolve_country_code(station_id)).upper()
+    return _register(
+        station_id=station_id,
+        country_code=country,
+        installed_version=installed_version,
+        mac_host=mac_host,
+        env_path=env_path,
+    )
+
+
 def profile_sync_status(station: str = "") -> dict:
     snapshot = cached_snapshot()
     profiles = snapshot.get("profiles") if isinstance(snapshot.get("profiles"), list) else []

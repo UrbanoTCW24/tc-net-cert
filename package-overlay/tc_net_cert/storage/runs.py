@@ -1,7 +1,8 @@
 """Allocate service-order directories TC-0001, TC-0002, and so on.
 
-The number is global. It does not restart each day, and a used number is
-not issued again. Older TCNC-YYYYMMDD-NNN folders stay where they are.
+The TC counter is per station (local disk). Supabase uses
+``{station}-{NNNN}`` (e.g. ``LAB-002-0042``) as the global validation id.
+Older TCNC-YYYYMMDD-NNN folders stay where they are.
 """
 
 from __future__ import annotations
@@ -16,6 +17,52 @@ from pathlib import Path
 _LEGACY_RE = re.compile(r"^TCNC-\d{8}-\d{3}$")
 _SERVICE_RE = re.compile(r"^TC-(\d{4,})$")
 RUN_ID_RE = re.compile(r"^(?:TC-\d{4,}|TCNC-\d{8}-\d{3})$")
+def normalize_station_code(station: str) -> str:
+    text = (station or "").strip().upper()
+    if not text or text in {"LAB-XX", "LAB-UNKNOWN"}:
+        return "LAB-UNKNOWN"
+    cleaned = re.sub(r"[^A-Z0-9\-]", "-", text)
+    cleaned = re.sub(r"-+", "-", cleaned).strip("-")
+    return cleaned or "LAB-UNKNOWN"
+
+
+def validation_number(station: str, run_id: str) -> str:
+    """Cloud-wide validation id: ``LAB-002-0042`` from station + local ``TC-0042``."""
+    site = normalize_station_code(station)
+    local = (run_id or "").strip().upper()
+    match = _SERVICE_RE.fullmatch(local)
+    if match:
+        return f"{site}-{int(match.group(1)):04d}"
+    if local:
+        slug = re.sub(r"[^A-Z0-9\-]", "-", local)
+        slug = re.sub(r"-+", "-", slug).strip("-")
+        return f"{site}-{slug}"
+    return site
+
+
+def validation_number_from_report(report: dict, *, station: str = "") -> str:
+    saved = str(report.get("validation_number") or "").strip()
+    if saved:
+        return saved
+    site = str(report.get("station") or station or "")
+    run_id = str(report.get("run_id") or "")
+    return validation_number(site, run_id)
+
+
+def run_synced_in_cloud(run_id: str, report: dict, stored: set[str], *, station: str = "") -> bool:
+    """True when this lab's row already exists in Supabase.
+
+    Legacy ``ont_runs`` used global ``TC-NNNN`` run_id values shared across labs.
+    With station provisioning we must match ``LAB-002-0042``, not bare ``TC-0042``.
+    """
+    if not stored:
+        return False
+    site = normalize_station_code(str(report.get("station") or station or ""))
+    validation = validation_number_from_report(report, station=station)
+    if validation and site not in {"", "LAB-UNKNOWN"}:
+        return validation in stored
+    local = (run_id or "").strip().upper()
+    return bool(local and local in stored)
 
 
 def allocate_run(runs_root: Path, when: datetime | None = None) -> tuple[str, Path]:

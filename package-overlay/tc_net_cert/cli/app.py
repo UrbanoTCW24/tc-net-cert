@@ -179,6 +179,24 @@ def doctor_cmd(
     _guard(ctx, lambda: _verify_install(operator, host, port))
 
 
+@app.command("register-station")
+def register_station_cmd(ctx: typer.Context) -> None:
+    """Claim LAB-NNN from Supabase (versionador) for this PC."""
+    _guard(ctx, lambda: _register_station(ctx))
+
+
+@app.command("register-tool")
+def register_tool_cmd(ctx: typer.Context) -> None:
+    """Assign TOOL-NNN in Supabase for this certifier PC (uses management_mac)."""
+    _guard(ctx, lambda: _register_tool(ctx))
+
+
+@app.command("schema-lab-tools")
+def schema_lab_tools_cmd(ctx: typer.Context) -> None:
+    """Create public.lab_tools in Supabase (DDL) if missing."""
+    _guard(ctx, lambda: _schema_lab_tools(ctx))
+
+
 @app.command()
 def report(ctx: typer.Context, run_id: str = typer.Argument("")) -> None:
     """Print the stored verdict for a run. The files themselves are not rewritten."""
@@ -537,6 +555,64 @@ def _fix_routes(wifi_connection: str) -> None:
     console.print("Comprueba: ip route show default")
 
 
+def _schema_lab_tools(ctx: typer.Context) -> None:
+    from tc_net_cert.config.tool_registry import apply_lab_tools_schema
+    from tc_net_cert.storage.supabase_runs import config_path
+
+    result = apply_lab_tools_schema(config_path())
+    if result.get("ok"):
+        if result.get("already_present"):
+            console.print("lab_tools ya existe en Supabase.")
+        else:
+            console.print("lab_tools creado en Supabase.")
+        return
+    console.print(result.get("error") or "No se pudo crear el esquema.")
+    console.print("Pegue lab_tools_paso1_minimo.sql en Supabase SQL Editor (no el SELECT de verificación).")
+    raise typer.Exit(code=1)
+
+
+def _register_tool(ctx: typer.Context) -> None:
+    config, path = _load(ctx)
+    from tc_net_cert.config.remote_sync import get_or_register_tool_identity, resolve_country_code
+    from tc_net_cert.storage.supabase_runs import config_path
+    from tc_net_cert.version import __version__
+
+    if not config.management_mac:
+        console.print("Falta network.management_mac en la config (interfaz de gestión, SAFE MODE).")
+        raise typer.Exit(code=1)
+    result = get_or_register_tool_identity(
+        station_id=config.station,
+        country_code=resolve_country_code(config.station),
+        installed_version=__version__,
+        mac_host=config.management_mac,
+        env_path=config_path(),
+    )
+    if result.get("ok"):
+        console.print(f"Herramienta: {result.get('tool_number')} · versión {result.get('tool_version')}")
+        if result.get("error"):
+            console.print(str(result["error"]))
+        return
+    console.print(result.get("error") or "No se pudo registrar la herramienta.")
+    raise typer.Exit(code=1)
+
+
+def _register_station(ctx: typer.Context) -> None:
+    config, path = _load(ctx)
+    from tc_net_cert.config.station_provision import provision_station
+    from tc_net_cert.storage.supabase_runs import config_path
+
+    result = provision_station(config_path=path, env_path=config_path())
+    if result.get("ok"):
+        console.print(f"Estación: {result.get('station_code')}")
+        if result.get("config_updated"):
+            console.print(f"Actualizado station en {path}")
+        elif result.get("error"):
+            console.print(str(result["error"]))
+        return
+    console.print(result.get("error") or "No se pudo registrar.")
+    raise typer.Exit(code=1)
+
+
 def _sync_runs(ctx: typer.Context) -> None:
     config, _path = _load(ctx)
     from tc_net_cert.config.loader import runs_directory
@@ -548,12 +624,19 @@ def _sync_runs(ctx: typer.Context) -> None:
         station=config.station,
         operator=config.operator,
     )
-    if result.get("sent"):
-        console.print("Enviadas: " + ", ".join(result["sent"]))
+    sent = result.get("sent") or []
+    failed = int(result.get("failed") or 0)
+    if sent:
+        console.print("Enviadas: " + ", ".join(sent))
+    if failed:
+        console.print(f"Fallidas al subir: {failed}")
     if result.get("error"):
-        console.print(result["error"])
-    if not result.get("sent") and not result.get("failed"):
-        console.print("Nada pendiente o no hay conexión a Supabase.")
+        console.print(str(result["error"]))
+    if not sent and not failed:
+        console.print(
+            "Nada pendiente, ya están en nube, o no hay conexión "
+            "(ejecuta «doctor» y revisa listed_run_ids / red)."
+        )
     if not result.get("ok"):
         raise typer.Exit(code=1)
 

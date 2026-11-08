@@ -76,6 +76,19 @@ install -m 644 "${KIT_ROOT}/provision/tc-net-cert-web.service" /etc/systemd/syst
 systemctl daemon-reload
 systemctl enable tc-net-cert-web.service
 
+apply_station_id() {
+    local cfg="$1"
+    local id="${TC_NET_CERT_STATION:-}"
+    [[ -f "${cfg}" ]] || return 0
+    [[ -n "${id}" ]] || return 0
+    if grep -q '^station:' "${cfg}"; then
+        sed -i "s/^station:.*/station: \"${id}\"/" "${cfg}"
+    else
+        printf '\nstation: "%s"\n' "${id}" >>"${cfg}"
+    fi
+    log "Identificador de estación en config: ${id} (nube → ${id}-0001, ${id}-0002, …)"
+}
+
 detect_layout() {
     if [[ "${LAYOUT}" == "4lan" || "${LAYOUT}" == "8lan" ]]; then
         echo "${LAYOUT}"
@@ -111,12 +124,32 @@ else
     install -m 640 "${src}" "${CONFIG_DST}"
     log "Plantilla instalada en ${CONFIG_DST} — edite MACs, station y operator antes de certificar."
 fi
+apply_station_id "${CONFIG_DST}"
 
 ROOT_CFG="/root/.config/tc-net-cert"
 mkdir -p "${ROOT_CFG}"
 chmod 700 "${ROOT_CFG}"
 touch "${ROOT_CFG}/portals.yaml"
 chmod 600 "${ROOT_CFG}/portals.yaml" 2>/dev/null || true
+
+if [[ -f "${ROOT_CFG}/supabase.env" ]]; then
+    log "Registro de estación en versionador (Supabase)…"
+    if TC_NET_CERT_SUPABASE="${ROOT_CFG}/supabase.env" "${VENV}/bin/python3" - <<'PY'; then
+from tc_net_cert.config.loader import default_config_path
+from tc_net_cert.config.station_provision import provision_station
+
+result = provision_station(config_path=default_config_path())
+if result.get("ok"):
+    print(result.get("station_code", ""))
+else:
+    raise SystemExit(result.get("error") or "provision failed")
+PY
+        assigned="$("${VENV}/bin/python3" -c "import json; print(json.load(open('/var/lib/tc-net-cert/station_identity.json')).get('station_code',''))" 2>/dev/null || true)"
+        log "Identificador de estación: ${assigned:-(ver station_identity.json)}"
+    else
+        log "Registro en línea diferido (sin red o ejecute docs/supabase/lab_stations.sql)."
+    fi
+fi
 
 if [[ ! -f "${ROOT_CFG}/supabase.env" ]]; then
     log "Coloque supabase.env en ${ROOT_CFG}/supabase.env (chmod 0600) — NO va en la USB."

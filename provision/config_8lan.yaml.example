@@ -4,6 +4,7 @@
 schema_version: "1.0.0"
 safe_mode: true
 operator: "OPERADOR"
+# Identificador único de estación — ver config_4lan.yaml.example
 station: "LAB-XX"
 runs_dir: ""
 report_title: "Ethernet Port Performance & Functional Certification"

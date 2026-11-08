@@ -1402,6 +1402,8 @@ class CertificationSession:
     def _mirror_bench_reports(self, report: CertificationReport) -> None:
         if self.run_dir is None:
             return
+        from tc_net_cert.storage.runs import validation_number as cloud_validation_number
+
         primary = self.run_dir.resolve()
         session_id = report.run_id
         for bench_id in ("B", "A"):
@@ -1420,6 +1422,7 @@ class CertificationSession:
 
             slice_report = narrow_report_to_bench(report, bench_id)
             slice_report.run_id = order_id
+            slice_report.validation_number = cloud_validation_number(slice_report.station, order_id)
             slice_report.dual_session_run = session_id
             slice_report.bench_orders = dict(report.bench_orders)
             render_reports(slice_report, target_dir)
@@ -1505,11 +1508,15 @@ class CertificationSession:
             report.global_verdict = worst_verdict([report.global_verdict, Verdict.FAIL])
         report.bench_orders = self._finalize_bench_orders(report)
         report.dual_session_run = self.bench_run_ids.get("A") or report.run_id
+        from tc_net_cert.storage.runs import validation_number as cloud_validation_number
+
+        report.validation_number = cloud_validation_number(report.station, report.run_id)
         from tc_net_cert.reporting.bench_slice import narrow_report_to_bench
 
         if report.bench_scope == "A+B":
             scoped_a = narrow_report_to_bench(report, "A")
             scoped_a.run_id = self.bench_run_ids.get("A", report.run_id)
+            scoped_a.validation_number = cloud_validation_number(scoped_a.station, scoped_a.run_id)
             scoped_a.bench_orders = dict(report.bench_orders)
             scoped_a.dual_session_run = ""
             render_reports(scoped_a, self.run_dir)
@@ -1536,7 +1543,8 @@ class CertificationSession:
         if stored:
             self.notify(f"SUPABASE FAIL {stored}")
         elif _supabase_configured():
-            self.notify(f"SUPABASE OK {report.run_id}")
+            label = report.validation_number or report.run_id
+            self.notify(f"SUPABASE OK {label}")
         seal_run(
             self.run_dir,
             {
@@ -1829,6 +1837,7 @@ def _supabase_configured() -> bool:
 
 
 def _store_run(report: CertificationReport, keys: dict[str, str]) -> str:
+    from tc_net_cert.storage.runs import validation_number as cloud_validation_number
     from tc_net_cert.storage.supabase_runs import config_path as supabase_config_path, forget_listed_run_ids, save_run
 
     explicit = os.environ.get("TC_NET_CERT_SUPABASE", "").strip()
@@ -1847,19 +1856,33 @@ def _store_run(report: CertificationReport, keys: dict[str, str]) -> str:
         for flow in report.flows
         if flow.mbps_avg is not None or flow.kind == "wifi"
     ]
+    from tc_net_cert.config.remote_sync import resolve_country_code
+
+    snapshot = report.model_dump(mode="json")
     error = save_run(
         path,
         {
+            "validation_number": report.validation_number
+            or cloud_validation_number(report.station, report.run_id),
             "run_id": report.run_id,
             "station": report.station,
             "operator": report.operator,
             "verdict": report.global_verdict.value,
+            "global_verdict": report.global_verdict.value,
+            "country_code": resolve_country_code(report.station),
+            "bench_scope": report.bench_scope,
+            "profile": report.profile,
+            "speed_profile": report.speed_profile,
+            "dut_profile": report.dut_profile,
+            "brand": report.dut.brand,
             "model": report.dut.model,
             "device_type": report.dut.device_type or report.dut.type,
             "serial": report.dut.serial,
             "mac": report.dut.mac,
             "software_version": report.dut.firmware,
             "hardware_version": report.dut.hardware,
+            "started_at": report.started_at_utc,
+            "finished_at": report.finished_at_utc,
             "tx_optical_power": report.dut.optical_tx,
             "rx_optical_power": report.dut.optical_rx,
             "working_voltage": report.dut.optical_voltage,
@@ -1872,6 +1895,7 @@ def _store_run(report: CertificationReport, keys: dict[str, str]) -> str:
             "wifi_password_24": keys.get("wifi_password_24") or "",
             "wifi_password_50": keys.get("wifi_password_50") or "",
             "throughput": flows,
+            "report_json": snapshot,
         },
     )
     if not error:

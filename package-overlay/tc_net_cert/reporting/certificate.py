@@ -358,6 +358,9 @@ def _ont_rows(report: CertificationReport, reference: dict) -> list[dict]:
         "temperature",
     )
     add("Trazabilidad", "ID registro", _record_id(report), "—", "—", scored=False)
+    from tc_net_cert.config.tool_registry import tool_trace_label
+
+    add("Trazabilidad", "Herramienta certificadora", tool_trace_label(), "—", "—", scored=False)
     add("Trazabilidad", "Nodo plataforma", "TECHCORP LAB", "—", "—", scored=False)
     add("Trazabilidad", "Hash seguridad", _security_hash(report)[:32] + "…", "—", "—", scored=False)
     return rows
