@@ -1,0 +1,16 @@
+# Plantilla — copiar y completar en la estación (NO commitear secretos).
+model: CG-2200
+technology: EMTA
+technology_label: DOCSIS
+portal_module: emta
+default_gateway: 192.168.1.1
+portal_host: 192.168.1.1
+portal_model: CG-2200
+# dut_user: admin
+# dut_password: "<solo en panel o archivo local ignorado por git>"
+bench: A
+ports: [LAN1, LAN2, LAN3, LAN4]
+simultaneous_pairs:
+  - [LAN1, LAN3]
+  - [LAN2, LAN4]
+pilot_serial_example: BS10007554006224

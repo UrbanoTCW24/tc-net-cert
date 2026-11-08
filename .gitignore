@@ -14,6 +14,8 @@ supabase.env
 *.pem
 *.key
 portals.yaml
+dut-packs/**/*.local.yaml
+.cursor/mcp.json
 /config.yaml
 /etc/tc-net-cert/
 .pytest_cache/

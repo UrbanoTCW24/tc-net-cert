@@ -43,6 +43,16 @@ insert into public.dut_profiles (
         'HG8245W5-6T', 'DO', 900.0, array['01', '05'],
         '192.168.1.1', -27.0, -8.0,
         'Réplica DO'
+    ),
+    (
+        'CG-2200', 'GT', 900.0, array[]::text[],
+        '192.168.1.1', -27.0, -8.0,
+        'EMTA DOCSIS Kaon — LAB-002 banco A; sin estados GPON'
+    ),
+    (
+        'CG-2200', 'DO', 900.0, array[]::text[],
+        '192.168.1.1', -27.0, -8.0,
+        'EMTA DOCSIS Kaon — réplica DO'
     )
 on conflict (model_id, country_code) do update set
     min_throughput_mbps = excluded.min_throughput_mbps,

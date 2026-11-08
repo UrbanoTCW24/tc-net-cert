@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gh": {
+      "url": "https://api.githubcopilot.com/mcp/",
+      "headers": {
+        "Authorization": "Bearer PEGAR_TU_PAT_AQUI",
+        "X-MCP-Toolsets": "repos,issues,pull_requests,actions",
+        "X-MCP-Readonly": "false"
+      }
+    }
+  }
+}
