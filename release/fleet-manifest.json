@@ -1,0 +1,9 @@
+{
+  "version": "1.2.0",
+  "url": "https://github.com/UrbanoTCW24/tc-net-cert/releases/download/v1.2.0/tc_net_cert-1.2.0-py3-none-any.whl",
+  "mandatory": false,
+  "channel": "lab",
+  "sha256": "39494f26f80ca25ae1984188e408e967d99ba4cb0cf16d56c3e878474b039c50",
+  "wheel": "tc_net_cert-1.2.0-py3-none-any.whl",
+  "note": "Manifiesto único para todas las estaciones. Actualícelo en cada tag vX.Y.Z."
+}

@@ -6,6 +6,11 @@ Estación **TECHCORP LAB** — certificación Ethernet (iperf3, bancos A/B, port
 - Panel local: `http://127.0.0.1:8080/`
 - Build / OTA: [docs/BUILD-AND-RELEASE.md](docs/BUILD-AND-RELEASE.md)
 - GitHub / tags: [docs/VERSIONING-AND-GITHUB.md](docs/VERSIONING-AND-GITHUB.md)
+- **Todas las estaciones (misma versión):** [docs/FLEET-ROLLOUT.md](docs/FLEET-ROLLOUT.md)
+- Manifiesto OTA compartido: [release/fleet-manifest.json](release/fleet-manifest.json)
+- Historial: [CHANGELOG.md](CHANGELOG.md)
+
+Release actual: **[v1.2.0](https://github.com/UrbanoTCW24/tc-net-cert/releases/tag/v1.2.0)**
 
 ## DUT piloto en LAB-002
 

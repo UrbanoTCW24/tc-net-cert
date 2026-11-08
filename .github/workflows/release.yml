@@ -67,6 +67,8 @@ jobs:
           out = Path("dist_usb/update_offer.json")
           out.write_text(json.dumps(offer, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
           PY
+          mkdir -p release
+          cp dist_usb/update_offer.json release/fleet-manifest.json
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -78,6 +80,7 @@ jobs:
             dist_usb/tc_net_cert-${{ steps.meta.outputs.version }}-py3-none-any.whl
             dist_usb/update_offer.json
             dist_usb/version.json
+            release/fleet-manifest.json
 
       - name: Publish wheel to Supabase (opcional HQ)
         env:
