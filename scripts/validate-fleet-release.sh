@@ -141,23 +141,42 @@ else
   [[ -n "${SHA_MAN:-}" ]] && pass "sha256 wheel = manifiesto"
 fi
 
-if [[ "${CHECK_GITHUB}" == "1" ]] && command -v curl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+if [[ "${CHECK_GITHUB}" == "1" ]] && command -v jq >/dev/null 2>&1; then
   tmp="$(mktemp)"
-  # raw.githubusercontent.com cachea agresivamente; ?ref=main evita manifest stale 1.2.0 tras push 1.3.0.
-  remote_url="${MANIFEST_URL}?$(date +%s)"
-  if curl -fsSL --connect-timeout 8 --max-time 20 -H 'Cache-Control: no-cache' -o "${tmp}" "${remote_url}" 2>/dev/null; then
-    REMOTE_VER="$(jq -r '.version // ""' "${tmp}")"
-    if [[ -n "${REMOTE_VER}" ]]; then
-      if version_gt "${REMOTE_VER}" "${VER}"; then
-        fail "GitHub main publica ${REMOTE_VER} y su código es ${VER} (main más nuevo que local)."
-      elif [[ "${REMOTE_VER}" != "${VER}" ]]; then
-        warn "GitHub main=${REMOTE_VER}, local=${VER} — publicar tag v${VER} + manifest para que instalaciones nuevas coincidan."
-      else
-        pass "GitHub main también declara ${VER} (tras push del manifest)."
+  remote_ver=""
+  # raw.../main/... suele quedar en CDN con manifest viejo; el SHA de origin/main es fiable.
+  if [[ -d "${ROOT}/.git" ]] && git -C "${ROOT}" rev-parse origin/main >/dev/null 2>&1; then
+    git -C "${ROOT}" fetch -q origin main 2>/dev/null || true
+    ref="$(git -C "${ROOT}" rev-parse origin/main)"
+    sha_url="https://raw.githubusercontent.com/${GITHUB_REPO}/${ref}/release/fleet-manifest.json"
+    if remote_ver="$(git -C "${ROOT}" show "origin/main:release/fleet-manifest.json" 2>/dev/null | jq -r '.version // ""')"; then
+      [[ -n "${remote_ver}" ]] && pass "origin/main@${ref:0:7} declara ${remote_ver} (git, no CDN)"
+    fi
+    if command -v curl >/dev/null 2>&1; then
+      if curl -fsSL --connect-timeout 8 --max-time 20 -o "${tmp}" "${sha_url}" 2>/dev/null; then
+        curl_ver="$(jq -r '.version // ""' "${tmp}")"
+        if [[ -n "${curl_ver}" && "${curl_ver}" != "${remote_ver}" ]]; then
+          warn "CDN SHA=${curl_ver} vs git ${remote_ver} (use install-online con tag o espere CDN main)."
+        elif [[ -n "${curl_ver}" ]]; then
+          remote_ver="${curl_ver}"
+        fi
       fi
     fi
+  elif command -v curl >/dev/null 2>&1; then
+    if curl -fsSL --connect-timeout 8 --max-time 20 -o "${tmp}" "${MANIFEST_URL}" 2>/dev/null; then
+      remote_ver="$(jq -r '.version // ""' "${tmp}")"
+    fi
+  fi
+  if [[ -n "${remote_ver}" ]]; then
+    if version_gt "${remote_ver}" "${VER}"; then
+      fail "GitHub main publica ${remote_ver} y su código es ${VER} (main más nuevo que local)."
+    elif [[ "${remote_ver}" != "${VER}" ]]; then
+      warn "GitHub main=${remote_ver}, local=${VER} — publicar tag v${VER} + manifest."
+    else
+      pass "GitHub main alineado con ${VER}."
+    fi
   else
-    warn "No se pudo leer manifiesto remoto (${MANIFEST_URL})."
+    warn "No se pudo leer manifiesto remoto."
   fi
   rm -f "${tmp}"
 fi
