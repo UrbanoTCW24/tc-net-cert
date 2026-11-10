@@ -5,12 +5,17 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from pathlib import Path
 
 from tc_net_cert.version import __version__
 
 OFFER_CACHE = Path("/var/lib/tc-net-cert/update_offer.json")
 _DEFAULT_CHANNEL = "lab"
+# HQ edita release/fleet-manifest.json en GitHub; las estaciones leen esta URL (override en supabase.env).
+DEFAULT_FLEET_MANIFEST_URL = (
+    "https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/release/fleet-manifest.json"
+)
 
 
 def _parse_env(path: Path) -> dict[str, str]:
@@ -59,22 +64,46 @@ def write_cached_offer(offer: dict) -> None:
         pass
 
 
-def _fetch_manifest_url(fields: dict[str, str]) -> dict:
-    url = fields.get("release_manifest_url") or fields.get("update_manifest_url") or ""
-    if not url.startswith("https://"):
+def _manifest_to_offer(loaded: dict) -> dict:
+    if not isinstance(loaded, dict):
         return {}
+    remote_ver = str(loaded.get("version") or "").strip()
+    url = str(loaded.get("url") or loaded.get("whl_url") or "").strip()
+    if not remote_ver or not url:
+        return {}
+    return {
+        "version": remote_ver,
+        "url": url,
+        "sha256": str(loaded.get("sha256") or "").strip(),
+        "mandatory": bool(loaded.get("mandatory")),
+        "channel": str(loaded.get("channel") or _DEFAULT_CHANNEL),
+    }
+
+
+def _fetch_manifest_url(fields: dict[str, str]) -> dict:
+    candidates: list[str] = []
+    custom = (fields.get("release_manifest_url") or fields.get("update_manifest_url") or "").strip()
+    if custom.startswith("https://"):
+        candidates.append(custom)
+    if DEFAULT_FLEET_MANIFEST_URL not in candidates:
+        candidates.append(DEFAULT_FLEET_MANIFEST_URL)
     try:
         import requests
     except ImportError:
         return {}
-    try:
-        response = requests.get(url, timeout=12)
-        if response.status_code != 200:
-            return {}
-        loaded = response.json()
-    except Exception:
-        return {}
-    return loaded if isinstance(loaded, dict) else {}
+    stamp = int(time.time())
+    for base in candidates:
+        for url in (base, f"{base}?t={stamp}"):
+            try:
+                response = requests.get(url, timeout=12)
+                if response.status_code != 200:
+                    continue
+                offer = _manifest_to_offer(response.json())
+                if offer:
+                    return offer
+            except Exception:
+                continue
+    return {}
 
 
 def _fetch_from_database(env_path: Path, channel: str) -> dict:

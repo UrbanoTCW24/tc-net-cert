@@ -29,6 +29,8 @@ class IperfPool:
     servers: list[RunningServer] = field(default_factory=list)
 
     def start(self, endpoint: Endpoint) -> None:
+        if any(item.endpoint_name == endpoint.logical_name for item in self.servers):
+            return
         binary = which("iperf3")
         if binary is None:
             raise MissingToolError("iperf3", "Install it with: sudo apt-get install -y iperf3")

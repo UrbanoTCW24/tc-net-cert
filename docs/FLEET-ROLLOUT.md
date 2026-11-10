@@ -35,7 +35,9 @@ En **cada estación**, en `~/.config/tc-net-cert/supabase.env` o el env que use 
 release_manifest_url=https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/release/fleet-manifest.json
 ```
 
-Operador en el panel: **Buscar actualización** → **Actualizar software** (descarga el `.whl`, verifica SHA256, `apply-update.sh`).
+El panel **consulta el manifiesto al abrir** (y al volver a la pestaña) y al arrancar el servicio. El operador puede usar **Buscar actualización** → **Actualizar software** (descarga el `.whl`, verifica SHA256, `apply-update.sh`).
+
+Si no define `release_manifest_url` en `supabase.env`, el host usa la URL pública anterior por defecto.
 
 Tras publicar **v1.3.0**:
 

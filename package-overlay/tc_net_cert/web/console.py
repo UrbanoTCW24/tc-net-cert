@@ -253,13 +253,15 @@ class Console:
                         env.setdefault(key, value)
             env[PORTALS_ENV] = str(portals_path())
             env[SUPABASE_ENV] = str(config_path())
-            if isinstance(bench_credentials, dict) and bench_credentials:
+            dual_lab = isinstance(bench_credentials, dict) and bool(bench_credentials)
+            if dual_lab:
                 env[BENCH_CREDENTIALS_ENV] = json.dumps(bench_credentials, ensure_ascii=False)
-            for key, value in (wifi or {}).items():
-                if value:
-                    env[key] = value
-            for key, value in stored_env().items():
-                env.setdefault(key, value)
+            if not dual_lab:
+                for key, value in (wifi or {}).items():
+                    if value:
+                        env[key] = value
+                for key, value in stored_env().items():
+                    env.setdefault(key, value)
             if not env.get(READING_ENV):
                 env[READING_ENV] = str(reading_path())
             env["DISPLAY"] = os.environ.get("DISPLAY", ":0")

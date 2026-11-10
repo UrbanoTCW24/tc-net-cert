@@ -38,4 +38,5 @@ tc_net_cert = [
     "web/templates/*",
     "reporting/templates/*",
     "config/defaults/*",
+    "sql/*",
 ]

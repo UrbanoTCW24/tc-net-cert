@@ -303,7 +303,7 @@
         {% else %}
         <span id="tool-id-pill" class="pill muted-pill" title="Registre la herramienta (Supabase)">ID herramienta: —</span>
         {% endif %}
-        <button type="button" id="btn-check-update" class="update-check-btn" title="Buscar versión en Supabase">Buscar actualización</button>
+        <button type="button" id="btn-check-update" class="update-check-btn" title="Buscar versión (GitHub fleet-manifest / Supabase)">Buscar actualización</button>
         <button type="button" id="btn-apply-update" class="update-apply-btn" hidden title="Instalar wheel publicado">Actualizar software</button>
         <span id="update-pill" class="pill update-pill" hidden title="Actualización disponible"></span>
         <span id="link-badge" class="pill">Sin medición</span>
@@ -802,23 +802,33 @@
       }
     }
 
+    async function fetchSoftwareUpdateOffer() {
+      const res = await fetch("/api/system/update/check", { method: "GET" });
+      return res.json();
+    }
+
+    async function checkSoftwareUpdateOnLoad() {
+      try {
+        const data = await fetchSoftwareUpdateOffer();
+        if (data && data.ok) paintUpdateOffer(data);
+      } catch (_err) {
+        /* offline */
+      }
+    }
+
     async function checkSoftwareUpdate() {
       const btn = document.getElementById("btn-check-update");
       if (btn) btn.disabled = true;
       try {
-        const res = await fetch("/api/system/update/check", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({token}),
-        });
-        const data = await res.json();
+        const data = await fetchSoftwareUpdateOffer();
         if (data && data.ok) {
           paintUpdateOffer(data);
+          const src = data.source ? " (" + data.source + ")" : "";
           if (!data.update_pending) {
-            window.alert("Versión actual (" + (data.app_version || "") + "). No hay release más nuevo en Supabase.");
+            window.alert("Versión actual (" + (data.app_version || "") + "). No hay release más nuevo" + src + ".");
           }
         } else {
-          window.alert((data && data.error) || "No se pudo consultar Supabase.");
+          window.alert((data && data.error) || "No se pudo consultar releases.");
         }
         await refreshSystemStatus();
       } finally {
@@ -884,6 +894,10 @@
     document.getElementById("btn-sync-profiles")?.addEventListener("click", () => syncRemoteProfiles());
     document.getElementById("btn-check-update")?.addEventListener("click", () => checkSoftwareUpdate());
     document.getElementById("btn-apply-update")?.addEventListener("click", () => applySoftwareUpdate());
+    checkSoftwareUpdateOnLoad();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkSoftwareUpdateOnLoad();
+    });
     refreshSystemStatus();
     const stationPortCount = {{ port_count | tojson }};
     const panelPrivileged = {{ job.privileged | tojson }};
@@ -3213,7 +3227,18 @@
       {section: "ÓPTICA GPON", title: "TX Optical Power", detail: "Potencia óptica TX (ONT)", path: "optics.txPowerDbm", rule: "range", minKey: "tx_low", maxKey: "tx_high", unit: "dBm", requiredKey: "tx", required: false},
       {section: "REGLAS DEL MODELO", title: "Working Voltage", detail: "Voltaje de trabajo", path: "optics.voltageMv", rule: "range", minKey: "voltage_low", maxKey: "voltage_high", unit: "mV", requiredKey: "voltage", required: true},
       {section: "REGLAS DEL MODELO", title: "Bias Current", detail: "Corriente de bias", path: "optics.biasMa", rule: "range", minKey: "bias_low", maxKey: "bias_high", unit: "mA", requiredKey: "bias", required: true},
-      {section: "REGLAS DEL MODELO", title: "Estado ONT", detail: "Estado de la ONT", path: "optics.ontState", rule: "equal", textKey: "ont_state", requiredKey: "ont_state", required: true},
+      {
+        section: "REGLAS DEL MODELO",
+        title: "Estado ONT",
+        detail: "Estado GPON en portal (O3–O5; O5 = aprovisionado)",
+        path: "optics.ontState",
+        rule: "one",
+        textKey: "ont_state",
+        defaultText: "O3|O4|O5",
+        requiredKey: "ont_state",
+        required: true,
+        hint: "Escribí O3|O4|O5 (también con comas). PASS si el portal muestra O3, O4 u O5; O5 = aprovisionado."
+      },
       {section: "SISTEMA", title: "Working Temperature", detail: "Temperatura interna del equipo", path: "system.tempC", rule: "range", maxKey: "temperature_high", unit: "°C", requiredKey: "temperature", required: false},
       {section: "QOS / TRÁFICO", title: "Jitter", detail: "Variación del retardo", path: "qos.jitterMs", rule: "range", maxKey: "jitter_ms", unit: "ms", requiredKey: "jitter", required: true},
       {section: "QOS / TRÁFICO", title: "Packet Loss", detail: "Pérdida de paquetes", path: "qos.lossPercent", rule: "range", maxKey: "loss_percent", unit: "%", requiredKey: "loss", required: true},
@@ -3252,7 +3277,24 @@
       if (card.phrase && rule === card.baseRule) return card.phrase;
       if (rule === "exists") return "Presente";
       if (rule === "equal") return 'igual a "' + (textValue || "") + '"';
-      if (rule === "one") return "uno de: " + String(textValue || "").split("|").map((item) => item.trim()).filter(Boolean).join(", ");
+      if (rule === "one") {
+        const parts = String(textValue || card.defaultText || "")
+          .split(/[|,]/)
+          .map((item) => item.trim().toUpperCase())
+          .filter(Boolean);
+        if (card.requiredKey === "ont_state" && parts.length >= 2) {
+          const ordered = [...new Set(parts)].sort((a, b) => {
+            const na = parseInt(a.replace(/^O/, ""), 10);
+            const nb = parseInt(b.replace(/^O/, ""), 10);
+            return (Number.isFinite(na) ? na : 0) - (Number.isFinite(nb) ? nb : 0);
+          });
+          const low = ordered[0];
+          const high = ordered[ordered.length - 1];
+          const note = ordered.indexOf("O5") >= 0 ? " (O5 = aprovisionado)" : "";
+          if (low && high && low !== high) return low + " a " + high + note;
+        }
+        return "uno de: " + parts.join(", ");
+      }
       if (rule === "pattern") return "patrón " + (textValue || "");
       const min = trimNumber(minValue);
       const max = trimNumber(maxValue);
@@ -3274,6 +3316,16 @@
       const numeric = card.rule === "range";
       if (bounds) bounds.hidden = !numeric;
       if (textRow) textRow.hidden = numeric || card.rule === "exists";
+    }
+    function ontStateReferenceText(item, card) {
+      const allowed = item.allowed_gpon_states;
+      if (Array.isArray(allowed) && allowed.length) {
+        return allowed.map((code) => String(code).trim()).filter(Boolean).join("|");
+      }
+      const raw = String(item.ont_state || "").trim();
+      if (/[|,]/.test(raw)) return raw.replace(/,/g, "|");
+      if (raw && raw.toUpperCase() !== "O5") return raw;
+      return card.defaultText || "O3|O4|O5";
     }
     function ruleCard(card, item) {
       const article = document.createElement("article");
@@ -3364,7 +3416,12 @@
       text.dataset.bound = "text";
       if (card.textKey) {
         text.dataset.refKey = card.textKey;
-        text.value = item[card.textKey] || card.defaultText || "";
+        if (card.textKey === "ont_state") {
+          text.value = ontStateReferenceText(item, card);
+          text.placeholder = "O3|O4|O5 (separá con | o coma)";
+        } else {
+          text.value = item[card.textKey] || card.defaultText || "";
+        }
       } else if (card.defaultText) {
         text.value = card.defaultText;
       }
@@ -3489,7 +3546,13 @@
       document.querySelectorAll("[data-required]").forEach((box) => {
         values.required[box.dataset.required] = box.checked;
       });
-      if (item.technology === "EMTA") {
+      if (item.technology === "ONT") {
+        const ontToken = String(values.ont_state || "").trim();
+        if (ontToken) {
+          values.allowed_gpon_states = ontToken.split(/[|,]/).map((part) => part.trim().toUpperCase()).filter(Boolean);
+          values.ont_state = values.allowed_gpon_states.join("|");
+        }
+      } else if (item.technology === "EMTA") {
         values.ont_state = "";
         values.mer_min = values.mer_low;
       }

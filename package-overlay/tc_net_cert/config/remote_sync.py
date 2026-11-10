@@ -239,8 +239,25 @@ def apply_profile_overlay(merged: dict, *, country_code: str = "", station: str 
     out["rx_low"] = float(row.get("optical_rx_low") if row.get("optical_rx_low") is not None else out.get("rx_low"))
     out["rx_high"] = float(row.get("optical_rx_high") if row.get("optical_rx_high") is not None else out.get("rx_high"))
     allowed = row.get("allowed_gpon_states")
-    if isinstance(allowed, list) and allowed:
-        out["allowed_gpon_states"] = [str(item) for item in allowed]
+    local_allowed = merged.get("allowed_gpon_states")
+    if isinstance(local_allowed, list) and local_allowed:
+        out["allowed_gpon_states"] = [str(item) for item in local_allowed]
+    elif isinstance(allowed, list) and allowed:
+        from tc_net_cert.reporting.reference import _normalize_gpon_state_code
+
+        normalized: list[str] = []
+        for item in allowed:
+            raw = str(item).strip().upper()
+            if re.fullmatch(r"O[1-7]", raw):
+                normalized.append(raw)
+            elif re.fullmatch(r"0?[1-7]", raw):
+                normalized.append(f"O{int(raw)}")
+            else:
+                code = _normalize_gpon_state_code(raw)
+                if re.fullmatch(r"O[1-7]", code):
+                    normalized.append(code)
+        if normalized:
+            out["allowed_gpon_states"] = normalized
     gateway = str(row.get("default_gateway") or "").strip()
     if gateway:
         out["default_gateway"] = gateway

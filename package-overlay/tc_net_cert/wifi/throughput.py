@@ -110,6 +110,28 @@ def take_credentials() -> list[tuple[str, str, str]]:
     return ready
 
 
+def credentials_from_reading(reading: Path | None) -> list[tuple[str, str, str]]:
+    """SSID/PSK for both bands from a bench-specific wifi-reading file (no env mutation)."""
+    env: dict[str, str] = {}
+    bench_file = reading is not None and reading.is_file()
+    if bench_file:
+        env.update(stored_env(reading))
+    else:
+        path = os.environ.get(READING_ENV, "").strip()
+        if path:
+            env.update(stored_env(Path(path)))
+        for key in (SSID_50, PSK_50, SSID_24, PSK_24):
+            override = os.environ.get(key, "").strip()
+            if override:
+                env[key] = override
+    ready: list[tuple[str, str, str]] = []
+    for band, ssid_key, psk_key in (("50", SSID_50, PSK_50), ("24", SSID_24, PSK_24)):
+        pair = _pair(env.get(ssid_key), env.get(psk_key))
+        if pair is not None:
+            ready.append((band, pair[0], pair[1]))
+    return ready
+
+
 def choose_lan(endpoints: list[Endpoint], bench_id: str = "") -> Endpoint | None:
     """Pick the DUT LAN port for Wi-Fi iperf: bank A uses LAN2/LAN3, bank B uses LAN6/LAN7."""
     ready = {
@@ -130,12 +152,36 @@ def choose_lan(endpoints: list[Endpoint], bench_id: str = "") -> Endpoint | None
     return None
 
 
-def measure_bands(endpoints: list[Endpoint], notify, audit=None, seconds: int = SECONDS) -> list[FlowResult]:
-    bands = take_credentials()
+def _wake_radio(iface: str, notify) -> None:
+    """Turn Wi-Fi on and attach the lab profile before joining the ONT SSID."""
+    if not _IFACE.fullmatch(iface or ""):
+        return
+    _run(["nmcli", "radio", "wifi", "on"], 15)
+    state = _run(["nmcli", "-g", "GENERAL.STATE", "device", "show", iface], 15)
+    lowered = (state.stdout or "").lower()
+    if "connected" not in lowered and "activating" not in lowered:
+        link = _run(["nmcli", "device", "connect", iface], 45)
+        if link.returncode != 0:
+            detail = (link.stderr or link.stdout or "").strip().replace("\n", " ")[:140]
+            notify(f"WIFI {iface} sin enlace de gestión ({detail or 'conecta el USB Wi‑Fi'})")
+
+
+def measure_bands(
+    endpoints: list[Endpoint],
+    notify,
+    audit=None,
+    seconds: int = SECONDS,
+    *,
+    bench_id: str = "",
+    reading: Path | None = None,
+) -> list[FlowResult]:
+    bands = credentials_from_reading(reading) if reading is not None else take_credentials()
+    if not bands and reading is None:
+        bands = credentials_from_reading(None)
     if not bands:
         notify("WIFI 5 y 2.4 no iniciaron: esta corrida no trae las claves leídas del portal.")
         return []
-    bench = os.environ.get("TC_NET_CERT_BENCH_ID", "").strip().upper()
+    bench = (bench_id or os.environ.get("TC_NET_CERT_BENCH_ID", "")).strip().upper() or "A"
     server = choose_lan(endpoints, bench)
     iface = _wifi_iface()
     if server is None or not iface:
@@ -145,6 +191,7 @@ def measure_bands(endpoints: list[Endpoint], notify, audit=None, seconds: int = 
             _skipped(band, ssid, f"Wi-Fi no inició: falta {target} con IP, o el radio.", server.logical_name if server else "LAN2")
             for band, ssid, _psk in bands
         ]
+    _wake_radio(iface, notify)
     radio = _prepare(iface)
     station = radio["ssid"] or "la red de la estación"
     notify(f"WIFI el radio deja {station} para medir 5 y después 2.4 contra {server.logical_name}")

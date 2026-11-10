@@ -25,8 +25,22 @@ install -m 755 "${KIT_ROOT}/scripts/apply-update.sh" "${PREFIX}/scripts/apply-up
 install -m 755 "${KIT_ROOT}/scripts/check-release-offer.sh" "${PREFIX}/scripts/check-release-offer.sh"
 install -m 755 "${KIT_ROOT}/scripts/download-release-wheel.sh" "${PREFIX}/scripts/download-release-wheel.sh"
 
-WHL="$(ls -1 "${KIT_ROOT}"/tc_net_cert-*.whl 2>/dev/null | sort -V | tail -1)"
-[[ -n "${WHL}" && -f "${WHL}" ]] || die "No se encontró tc_net_cert-*.whl en ${KIT_ROOT}"
+find_kit_wheel() {
+    local candidate
+    for dir in "${KIT_ROOT}" "${KIT_ROOT}/dist" "${KIT_ROOT}/dist_usb"; do
+        [[ -d "${dir}" ]] || continue
+        for candidate in "${dir}"/tc_net_cert-*.whl; do
+            [[ -f "${candidate}" ]] || continue
+            printf '%s\n' "${candidate}"
+        done
+    done | sort -V | tail -1
+}
+
+WHL="$(find_kit_wheel)"
+if [[ -z "${WHL}" || ! -f "${WHL}" ]]; then
+    die "No se encontró tc_net_cert-*.whl en ${KIT_ROOT} (ni en dist/ ni dist_usb/)."
+fi
+log "Wheel: $(basename "${WHL}")"
 
 # Comprobar mejora publicada (GitHub fleet-manifest) antes de instalar el wheel del kit.
 # TC_NET_CERT_AUTO_UPDATE=1 → descarga el wheel remoto si es más nuevo que el USB.

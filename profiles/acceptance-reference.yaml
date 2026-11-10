@@ -9,7 +9,8 @@ models:
     throughput_mbps: 900.0
     optical_rx_low: -27.0
     optical_rx_high: -8.0
-    ont_state: O5
+    allowed_gpon_states: [O3, O4, O5]
+    ont_state: O3|O4|O5
 
   - name: HG8245W5-6T
     technology: ONT
@@ -17,7 +18,8 @@ models:
     throughput_mbps: 900.0
     optical_rx_low: -27.0
     optical_rx_high: -8.0
-    ont_state: O5
+    allowed_gpon_states: [O3, O4, O5]
+    ont_state: O3|O4|O5
 
   - name: CG-2200
     technology: EMTA

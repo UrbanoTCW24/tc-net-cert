@@ -37,8 +37,9 @@ _ONT_LIMITS = {
     "mer_high": 35.0,
     "ds_channels_min": 16.0,
     "uncorrectables_max": 1000.0,
-    "ont_state": "O5",
+    "ont_state": "O3|O4|O5",
 }
+_DEFAULT_ONT_ALLOWED = ("O3", "O4", "O5")
 _EMTA_LIMITS = {
     **_ONT_LIMITS,
     "ont_state": "",
@@ -83,7 +84,7 @@ def reference_path() -> Path:
 
 
 _STRINGS = {"technology", "technology_label", "model", "ont_state"}
-_STORED = tuple(key for key in _ONT_LIMITS) + ("technology", "technology_label", "model")
+_STORED = tuple(key for key in _ONT_LIMITS) + ("technology", "technology_label", "model", "allowed_gpon_states")
 _RULES = {"exists", "range", "equal", "one", "pattern"}
 _REQUIRED = (
     "rx",
@@ -160,10 +161,26 @@ def _merge(name: str, base: dict, saved: dict) -> dict:
     if merged.get("technology") == "EMTA":
         merged["ont_state"] = ""
         merged["technology_label"] = "DOCSIS"
+        merged.pop("allowed_gpon_states", None)
     else:
         merged["technology"] = "ONT"
         merged["technology_label"] = "GPON"
-        merged["ont_state"] = str(merged.get("ont_state") or "O5")
+        rules = saved.get("rules") if isinstance(saved.get("rules"), dict) else {}
+        allowed_raw = saved.get("allowed_gpon_states")
+        if isinstance(allowed_raw, list) and allowed_raw:
+            merged["allowed_gpon_states"] = [
+                _normalize_gpon_state_code(str(item)) for item in allowed_raw if str(item).strip()
+            ]
+        elif str(rules.get("ont_state") or "") == "one" or "|" in str(merged.get("ont_state") or ""):
+            text = str(merged.get("ont_state") or "O3|O4|O5")
+            merged["allowed_gpon_states"] = [
+                _normalize_gpon_state_code(part)
+                for part in text.replace(",", "|").split("|")
+                if part.strip()
+            ] or list(_DEFAULT_ONT_ALLOWED)
+        else:
+            merged["allowed_gpon_states"] = list(_DEFAULT_ONT_ALLOWED)
+        merged["ont_state"] = "|".join(merged["allowed_gpon_states"])
     return merged
 
 
@@ -190,13 +207,23 @@ def _normalize_gpon_state_code(raw: str) -> str:
 
 def ont_state_expectation(reference: dict) -> str:
     allowed = reference.get("allowed_gpon_states")
-    if isinstance(allowed, list) and allowed:
-        labels = []
-        for item in allowed:
-            code = _normalize_gpon_state_code(str(item))
-            labels.append(code if code else str(item))
-        return " o ".join(labels)
-    return str(reference.get("ont_state") or "O5")
+    if not isinstance(allowed, list) or not allowed:
+        text = str(reference.get("ont_state") or "")
+        if "|" in text:
+            allowed = [part.strip() for part in text.split("|") if part.strip()]
+        else:
+            allowed = list(_DEFAULT_ONT_ALLOWED)
+    codes = [_normalize_gpon_state_code(str(item)) for item in allowed if str(item).strip()]
+    codes = [code for code in codes if code]
+    if not codes:
+        return "O3 a O5 (O5 = aprovisionado)"
+    if len(codes) >= 2:
+        ordered = sorted({code for code in codes}, key=lambda token: int(token[1:]) if len(token) == 2 and token[1:].isdigit() else 0)
+        low, high = ordered[0], ordered[-1]
+        note = " (O5 = aprovisionado)" if "O5" in ordered else ""
+        if low != high:
+            return f"{low} a {high}{note}"
+    return " o ".join(codes)
 
 
 def ont_state_passes(reference: dict, raw_state: str) -> bool:
@@ -209,8 +236,8 @@ def ont_state_passes(reference: dict, raw_state: str) -> bool:
         accepted |= {code[1:] if code.startswith("O") else code for code in accepted}
         token = read[1:] if read.startswith("O") else read
         return read in accepted or token in accepted
-    expected = _normalize_gpon_state_code(str(reference.get("ont_state") or "O5"))
-    return read == expected
+    fallback = list(_DEFAULT_ONT_ALLOWED)
+    return read in {_normalize_gpon_state_code(str(item)) for item in fallback}
 
 
 def load_reference(
@@ -258,10 +285,30 @@ def save_reference(name: str, values: dict, path: Path | None = None) -> dict:
         incoming = values[key]
         cleaned[key] = None if incoming is None or incoming == "" else float(incoming)
     if technology == "ONT":
-        state = str(values.get("ont_state") or cleaned.get("ont_state") or "O5").strip()
-        if not state or len(state) > 16 or any(char in state for char in "\n\r<>"):
+        incoming_allowed = values.get("allowed_gpon_states")
+        if isinstance(incoming_allowed, list) and incoming_allowed:
+            parts = [_normalize_gpon_state_code(str(part)) for part in incoming_allowed if str(part).strip()]
+            if parts:
+                cleaned["allowed_gpon_states"] = parts
+                cleaned["ont_state"] = "|".join(parts)
+        state_text = str(values.get("ont_state") or cleaned.get("ont_state") or "O3|O4|O5").strip()
+        if not state_text or len(state_text) > 48 or any(char in state_text for char in "\n\r<>"):
             raise ValueError("El estado ONT de referencia no es válido.")
-        cleaned["ont_state"] = state
+        rule = str((values.get("rules") or {}).get("ont_state") or "one")
+        if rule == "one" or "|" in state_text:
+            parts = [
+                _normalize_gpon_state_code(part)
+                for part in state_text.replace(",", "|").split("|")
+                if part.strip()
+            ]
+            if not parts:
+                parts = list(_DEFAULT_ONT_ALLOWED)
+            cleaned["allowed_gpon_states"] = parts
+            cleaned["ont_state"] = "|".join(parts)
+        else:
+            code = _normalize_gpon_state_code(state_text)
+            cleaned["ont_state"] = code
+            cleaned["allowed_gpon_states"] = list(_DEFAULT_ONT_ALLOWED)
         ranges = _RANGES
     else:
         cleaned["ont_state"] = ""
@@ -308,7 +355,13 @@ def install_builtin_profiles(path: Path | None = None) -> None:
     changed = False
     for item in BUILTIN_PROFILES:
         if item["name"] not in profiles:
-            profiles[item["name"]] = {key: item[key] for key in _STORED}
+            merged = _merge(item["name"], item, {})
+            profiles[item["name"]] = {key: merged[key] for key in _STORED if key in merged}
+            rules = profiles[item["name"]].get("rules")
+            if not isinstance(rules, dict):
+                rules = {}
+            rules.setdefault("ont_state", "one")
+            profiles[item["name"]]["rules"] = rules
             changed = True
     if not changed and file.is_file():
         return
@@ -355,7 +408,7 @@ _ONT_PHRASE = {
     "O2": "Espera",
     "O3": "Número de serie",
     "O4": "Ranging",
-    "O5": "Operación",
+    "O5": "Operación (aprovisionado)",
     "O6": "POPUP",
     "O7": "Parada de emergencia",
 }
@@ -376,7 +429,7 @@ def optical_chart(
     rx_high = float(reference["rx_high"])
     tx_low = float(reference["tx_low"])
     tx_high = float(reference["tx_high"])
-    expected_state = str(reference.get("ont_state") or "O5").strip().upper()
+    expected_state = ont_state_expectation(reference)
     raw_state = (ont_state or "").strip().upper()
     state = raw_state.split()[0] if raw_state else ""
     link_text = (link or "").strip() or "SIN DATO"
@@ -389,7 +442,7 @@ def optical_chart(
     phrase = _ONT_PHRASE.get(state, "")
     shown_state = f"{state} · {phrase}" if phrase else (state or "SIN DATO")
     state_color = "#1a1a1a"
-    if state and state == expected_state:
+    if state and ont_state_passes(reference, raw_state):
         state_color = "#16a34a"
     elif state:
         state_color = "#b91c1c"

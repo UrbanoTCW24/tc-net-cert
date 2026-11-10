@@ -256,6 +256,19 @@ def _handler(
                     return
                 self._json(200, _system_status_payload(console))
                 return
+            if path == "/api/system/update/check":
+                if not _local_request(self):
+                    self._json(403, {"ok": False, "error": "Solo se aceptan peticiones locales."})
+                    return
+                from tc_net_cert.config.release_sync import sync_release_offer
+                from tc_net_cert.storage.supabase_runs import config_path as supabase_env_path
+
+                parsed = urlparse(self.path)
+                qs = parse_qs(parsed.query)
+                channel = (qs.get("channel") or ["lab"])[0]
+                result = sync_release_offer(env_path=supabase_env_path(), channel=str(channel))
+                self._json(200 if result.get("ok") else 409, result)
+                return
             if path == "/api/profiles/status":
                 if not _local_request(self):
                     self._json(403, {"ok": False, "error": "Solo se aceptan peticiones locales."})

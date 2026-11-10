@@ -18,7 +18,7 @@ Release actual: **[v1.2.0](https://github.com/UrbanoTCW24/tc-net-cert/releases/t
 curl -fsSL https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/scripts/install-online.sh | sudo bash
 ```
 
-Guía completa: [docs/INSTALL-ONLINE.md](docs/INSTALL-ONLINE.md)
+Guía operador Ubuntu: **[docs/INSTALAR-UBUNTU.md](docs/INSTALAR-UBUNTU.md)** · [INSTALL-ONLINE.md](docs/INSTALL-ONLINE.md)
 
 ## DUT piloto en LAB-002
 

@@ -25,7 +25,15 @@ ONT_RULE_SPECS: list[dict[str, Any]] = [
     {"section": "ÓPTICA GPON", "title": "TX Optical Power", "path": "optics.txPowerDbm", "rule": "range", "required_key": "tx", "min_key": "tx_low", "max_key": "tx_high", "unit": "dBm"},
     {"section": "REGLAS DEL MODELO", "title": "Working Voltage", "path": "optics.voltageMv", "rule": "range", "required_key": "voltage", "min_key": "voltage_low", "max_key": "voltage_high", "unit": "mV"},
     {"section": "REGLAS DEL MODELO", "title": "Bias Current", "path": "optics.biasMa", "rule": "range", "required_key": "bias", "min_key": "bias_low", "max_key": "bias_high", "unit": "mA"},
-    {"section": "REGLAS DEL MODELO", "title": "Estado ONT", "path": "optics.ontState", "rule": "equal", "required_key": "ont_state", "text_key": "ont_state"},
+    {
+        "section": "REGLAS DEL MODELO",
+        "title": "Estado ONT",
+        "path": "optics.ontState",
+        "rule": "one",
+        "required_key": "ont_state",
+        "text_key": "ont_state",
+        "default_text": "O3|O4|O5",
+    },
     {"section": "SISTEMA", "title": "Working Temperature", "path": "system.tempC", "rule": "range", "required_key": "temperature", "max_key": "temperature_high", "unit": "°C"},
     {"section": "QOS / TRÁFICO", "title": "Jitter", "path": "qos.jitterMs", "rule": "range", "required_key": "jitter", "max_key": "jitter_ms", "unit": "ms"},
     {"section": "QOS / TRÁFICO", "title": "Packet Loss", "path": "qos.lossPercent", "rule": "range", "required_key": "loss", "max_key": "loss_percent", "unit": "%"},
@@ -89,7 +97,14 @@ def _row_for_spec(spec: dict[str, Any], profile: dict) -> list[str]:
     min_val = profile.get(min_key) if min_key else ""
     max_val = profile.get(max_key) if max_key else ""
     if text_key:
-        text_val = profile.get(text_key) or spec.get("default_text") or ""
+        if text_key == "ont_state":
+            allowed = profile.get("allowed_gpon_states")
+            if isinstance(allowed, list) and allowed:
+                text_val = "|".join(str(item) for item in allowed)
+            else:
+                text_val = profile.get(text_key) or spec.get("default_text") or ""
+        else:
+            text_val = profile.get(text_key) or spec.get("default_text") or ""
     elif rule in {"equal", "one", "pattern"}:
         text_val = spec.get("default_text") or ""
     else:
@@ -185,7 +200,12 @@ def import_reference_csv(content: str, *, expected_name: str = "") -> dict:
             values[text_key] = row[6].strip()
         elif rule in {"equal", "one", "pattern"} and row[6].strip():
             if spec.get("text_key") == "ont_state" or key == "ont_state":
-                values["ont_state"] = row[6].strip()
+                token = row[6].strip()
+                values["ont_state"] = token
+                if rule == "one":
+                    values["allowed_gpon_states"] = [
+                        part.strip() for part in token.replace(",", "|").split("|") if part.strip()
+                    ]
     if meta_tech == "EMTA":
         values["ont_state"] = ""
         if values.get("mer_low") is not None:

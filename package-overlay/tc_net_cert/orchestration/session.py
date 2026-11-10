@@ -127,6 +127,7 @@ class CertificationSession:
         self.moved: set[str] = set()
         self.pool = IperfPool()
         self.abort = ""
+        self._dut_identity_collected = False
         self._wrote_state = False
         self.run_dir = None
         self.audit: AuditTrail | None = None
@@ -325,9 +326,11 @@ class CertificationSession:
                     if "bidirectional" in self.stages:
                         self.flows.extend(self._bidirectional())
                     self.flows.extend(self._qos())
+                self._ensure_dut_identity(report)
                 self.flows.extend(self._wifi_bands())
             elif "wifi" in self.stages:
                 self._start_iperf()
+                self._ensure_dut_identity(report)
                 self.flows.extend(self._wifi_bands())
         except (PreflightError, ToolError) as exc:
             self.abort = str(exc)
@@ -1082,11 +1085,12 @@ class CertificationSession:
             self.notify(f"PACKET LOSS {loss:.2f}%")
         return flows
 
-    def _start_wifi_server(self) -> None:
+    def _start_wifi_server(self, bench_id: str = "") -> None:
         """Keep one LAN iperf server up so the station radio can measure the DUT Wi-Fi."""
         from tc_net_cert.wifi.throughput import choose_lan
 
-        server = choose_lan(self.endpoints)
+        bench = (bench_id or self.bench_id or "A").strip().upper()
+        server = choose_lan(self.endpoints, bench)
         if server is None or not self._can_iperf(server) or self.audit is None:
             self.notify("WIFI servidor no iniciado: falta LAN2 o LAN3 con IP del equipo")
             return
@@ -1108,31 +1112,97 @@ class CertificationSession:
         )
 
     def _wifi_bands(self) -> list[FlowResult]:
-        from tc_net_cert.wifi.throughput import PSK_24, PSK_50, READING_ENV, measure_bands, stored_env
+        from tc_net_cert.storage.bench_identity import bench_wifi_reading_path
+        from tc_net_cert.wifi.throughput import (
+            PSK_24,
+            PSK_50,
+            READING_ENV,
+            SSID_24,
+            SSID_50,
+            measure_bands,
+            reading_path,
+            stored_env,
+        )
 
-        reading = os.environ.get(READING_ENV, "").strip()
-        stored = stored_env(Path(reading) if reading else None)
-        self._wifi_passwords = {
-            "wifi_password_24": os.environ.get(PSK_24, "") or stored.get(PSK_24, ""),
-            "wifi_password_50": os.environ.get(PSK_50, "") or stored.get(PSK_50, ""),
-        }
-        try:
-            seconds = int(self.config.iperf.duration_seconds)
-            scope = self._report_bench_scope()
-            if scope == "A+B":
-                bench = "A+B"
-                lan_hint = "LAN2/LAN3 (A) y LAN6/LAN7 (B)"
-            else:
-                bench = self.bench_id or "A"
+        scope = self._report_bench_scope()
+        if scope == "A+B":
+            bench_ids = ["A", "B"]
+        elif self.bench_id in {"A", "B"}:
+            bench_ids = [self.bench_id]
+        else:
+            bench_ids = ["A"]
+
+        flows: list[FlowResult] = []
+        remembered_24 = ""
+        remembered_50 = ""
+        seconds = int(self.config.iperf.duration_seconds)
+        for bench in bench_ids:
+            try:
+                reading_file = bench_wifi_reading_path(bench)
+                if not reading_file.is_file():
+                    env_reading = os.environ.get(READING_ENV, "").strip()
+                    if len(bench_ids) == 1 and env_reading:
+                        reading_file = Path(env_reading)
+                    elif len(bench_ids) == 1:
+                        fallback = reading_path()
+                        reading_file = fallback if fallback.is_file() else reading_file
+                use_reading: Path | None = reading_file if reading_file.is_file() else None
+                if use_reading is None and len(bench_ids) == 1:
+                    lan_hint = "LAN6 o LAN7" if bench == "B" else "LAN2 o LAN3"
+                    self.notify(
+                        f"WIFI banco {bench}: sin archivo por banco; usando claves en entorno, "
+                        f"5 GHz y después 2.4, {seconds} s contra {lan_hint}"
+                    )
+                    self._start_wifi_server(bench)
+                    flows.extend(
+                        measure_bands(
+                            self.endpoints,
+                            self.notify,
+                            audit=self.audit,
+                            seconds=seconds,
+                            bench_id=bench,
+                            reading=None,
+                        )
+                    )
+                    continue
+                if use_reading is None:
+                    self.notify(
+                        f"WIFI banco {bench} omitido: falta lectura Wi-Fi "
+                        f"(Buscar en portal banco {bench} antes de certificar)."
+                    )
+                    continue
+                stored = stored_env(use_reading)
+                remembered_24 = remembered_24 or stored.get(PSK_24, "")
+                remembered_50 = remembered_50 or stored.get(PSK_50, "")
                 lan_hint = "LAN6 o LAN7" if bench == "B" else "LAN2 o LAN3"
+                self.notify(
+                    f"WIFI banco {bench}: un solo radio, primero 5 GHz y después 2.4, "
+                    f"{seconds} s contra {lan_hint}; "
+                    f"SSID 5={stored.get(SSID_50, '?')} 2.4={stored.get(SSID_24, '?')}"
+                )
+                self._start_wifi_server(bench)
+                flows.extend(
+                    measure_bands(
+                        self.endpoints,
+                        self.notify,
+                        audit=self.audit,
+                        seconds=seconds,
+                        bench_id=bench,
+                        reading=use_reading,
+                    )
+                )
+            except Exception as exc:
+                self.notify(f"WIFI banco {bench} falló: {type(exc).__name__}: {exc}")
+        if not flows and bench_ids:
             self.notify(
-                f"WIFI banco {bench}: un solo radio, primero 5 GHz y después 2.4, "
-                f"{seconds} s contra {lan_hint}"
+                "WIFI sin flujos útiles: Buscar en cada banco (SSID/clave), radio Wi‑Fi encendido; "
+                "revisa también LAN1 del banco A si certificas A+B."
             )
-            return measure_bands(self.endpoints, self.notify, audit=self.audit, seconds=seconds)
-        except Exception:
-            self.notify("WIFI NOT RUN: la medición Wi-Fi se interrumpió")
-            return []
+        self._wifi_passwords = {
+            "wifi_password_24": remembered_24,
+            "wifi_password_50": remembered_50,
+        }
+        return flows
 
     def _remember_wifi(self, interfaces) -> None:
         for record in interfaces:
@@ -1209,8 +1279,14 @@ class CertificationSession:
                     f"STATE {endpoint.logical_name} RESULT {endpoint.iperf_state.value} {endpoint.failure_reason}".rstrip()
                 )
 
+    def _ensure_dut_identity(self, report: CertificationReport) -> None:
+        if self._dut_identity_collected:
+            return
+        self._collect_dut_identity(report)
+        self._dut_identity_collected = True
+
     def _collect_dut_identity(self, report: CertificationReport) -> None:
-        """After throughput, read SN and MAC from the ONT through a test namespace."""
+        """Read SN, MAC and Wi-Fi SSIDs from each ONT portal (before Wi-Fi when possible)."""
         report.job = self.job
         _apply_known_identity(report)
         _seed_bench_duts(report)
@@ -1287,6 +1363,21 @@ class CertificationSession:
                     dut.wifi_password_24 = wifi_keys["wifi_password_24"]
                 if wifi_keys.get("wifi_password_50"):
                     dut.wifi_password_50 = wifi_keys["wifi_password_50"]
+                portal_wifi = dict(payload)
+                portal_wifi.update(wifi_keys)
+                try:
+                    from tc_net_cert.storage.bench_identity import bench_wifi_reading_path
+                    from tc_net_cert.wifi.throughput import store_reading
+
+                    if store_reading(portal_wifi, bench_wifi_reading_path(bench_id)):
+                        ssid50 = str(portal_wifi.get("ssid_50") or "").strip()
+                        ssid24 = str(portal_wifi.get("ssid_24") or "").strip()
+                        self.notify(
+                            f"WIFI banco {bench_id}: lectura portal "
+                            f"5={ssid50 or '?'} 2.4={ssid24 or '?'}"
+                        )
+                except Exception:
+                    pass
                 mac_note = f" MAC={dut.mac}" if dut.mac else ""
                 model_note = f" MODEL={detected}" if detected else ""
                 software_note = f" SW={dut.firmware}" if dut.firmware else ""
@@ -1468,7 +1559,7 @@ class CertificationSession:
         assert self.audit is not None and self.run_dir is not None
         token = current_audit.set(self.audit)
         try:
-            self._collect_dut_identity(report)
+            self._ensure_dut_identity(report)
             errors = self.cleanup.run()
             remaining = [name for name in self.manager.list_namespaces() if name in self.active.namespaces]
             reasons = list(errors)

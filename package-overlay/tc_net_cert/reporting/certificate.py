@@ -303,19 +303,19 @@ def _ont_rows(report: CertificationReport, reference: dict) -> list[dict]:
         "O2": "Espera",
         "O3": "Número de serie",
         "O4": "Ranging",
-        "O5": "Operación",
+        "O5": "Operación (aprovisionado)",
         "O6": "POPUP",
         "O7": "Parada de emergencia",
     }.get(read_state, "")
     shown_state = f"{read_state} · {phrase}" if phrase else read_state
     if not read_state:
-        add("Óptica GPON", "Estado ONT", "SIN DATO", f'igual a "{expected_state}"', "SIN DATO", scored=_counts_score(reference, "ont_state"))
+        add("Óptica GPON", "Estado ONT", "SIN DATO", expected_state, "SIN DATO", scored=_counts_score(reference, "ont_state"))
     else:
         add(
             "Óptica GPON",
             "Estado ONT",
             shown_state,
-            f'igual a "{expected_state}"',
+            expected_state,
             "CUMPLE" if ont_state_passes(reference, raw_state) else "NO CUMPLE",
             scored=_counts_score(reference, "ont_state"),
         )
