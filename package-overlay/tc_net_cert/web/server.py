@@ -1389,6 +1389,7 @@ def _catalog(root: Path, stored: set[str] | None = None) -> list[dict]:
                     "started_at": "",
                     "has_report": False,
                     "stored": None if stored is None else path.name in stored,
+                    "validation_number": "",
                     "archived": False,
                     "measurement": "",
                     "sort_key": "",

@@ -726,7 +726,7 @@
             <td>
               <a href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">{{ run.run_id }}</a>
               <a class="pdf-btn" href="/cert/{{ run.run_id }}" target="_blank" rel="noopener">PDF</a>
-              {% if run.validation_number and run.validation_number != run.run_id %}
+              {% if run.get("validation_number") and run.validation_number != run.run_id %}
               <div class="meta-line">{{ run.validation_number }}</div>
               {% endif %}
             </td>
