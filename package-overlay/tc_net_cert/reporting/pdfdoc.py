@@ -75,43 +75,49 @@ def _ont(canvas: _Canvas, report: CertificationReport, sheet: dict) -> None:
 
 
 def _emta(canvas: _Canvas, report: CertificationReport, sheet: dict) -> None:
-    _masthead(canvas, "REPORTE TECNICO DE CERTIFICACION CPE — EMTA / DOCSIS")
+    pages = int(sheet.get("emta_page_count") or 3)
+    title = "REPORTE TECNICO DE CERTIFICACION CPE — EMTA / DOCSIS"
+    _masthead(canvas, title)
     _identity(canvas, sheet, serial=True)
     _verdict(canvas, "RESULTADO DE CERTIFICACION", sheet["headline"], sheet)
     canvas.text(str(sheet.get("emta_tally") or ""), 9, color=_MUTED)
-    canvas.gap(6)
+    profile = str(sheet.get("emta_profile") or "").strip()
+    if profile:
+        canvas.text(profile, 9, bold=True, color=(0.047, 0.176, 0.420))
+        canvas.gap(4)
     headers = ("PARAMETRO", "LEIDO", "ESPERADO", "CUMPLE")
     widths = (180, 130, 150, 63)
     canvas.columns(headers, widths, header=True)
     canvas.rule()
-    section = ""
     for row in sheet["rows"]:
         if canvas.low():
             canvas.page()
             canvas.columns(headers, widths, header=True)
             canvas.rule()
-        if row["section"] != section:
-            section = row["section"]
-            canvas.text(section, 9, bold=True, color=(0.047, 0.176, 0.420))
         canvas.columns((row["name"], row["read"], row["expected"], row["state"]), widths, state=row["state"])
         canvas.rule(light=True)
-    _note(canvas, "Hoja 1/2.")
+    _note(canvas, f"Hoja 1/{pages}.")
     canvas.page()
-    _masthead(canvas, f"TECHCORP — Anexo RF · ORDEN: {sheet['order']} · Hoja 2/2")
-    canvas.text("DETALLE DE CANALES RF", 11, bold=True)
+    _masthead(canvas, f"TECHCORP — Anexo RF · ORDEN: {sheet['order']} · Hoja 2/{pages}")
+    canvas.text("ANALISIS DE ESPECTRO DE RF — CERTIFICACION", 11, bold=True)
     canvas.gap(4)
-    _channel_table(canvas, "DOWNSTREAM (DS)", sheet.get("ds_rows") or [], empty="Sin lectura de canales downstream en esta unidad.")
-    if sheet.get("ds_correctable_total") or sheet.get("ds_uncorrectable_total"):
+    counts = sheet.get("rf_channel_counts") or {}
+    ds_power = (report.dut.ds_power or "").strip() or "NO_MEDIDO"
+    us_power = (report.dut.us_power or "").strip() or "NO_MEDIDO"
+    canvas.text(f"DS promedio {ds_power} · US promedio {us_power}", 9, color=_MUTED)
+    if counts.get("ds") or counts.get("us"):
         canvas.text(
-            f"Total corregibles {sheet.get('ds_correctable_total') or '—'} · incorregibles {sheet.get('ds_uncorrectable_total') or '—'}",
-            8,
+            " · ".join(part for part in (counts.get("ds"), counts.get("us")) if part),
+            9,
             color=_MUTED,
         )
-    _channel_table(canvas, "UPSTREAM (US)", sheet.get("us_rows") or [], empty="Sin lectura de canales upstream en esta unidad.")
-    canvas.gap(8)
-    canvas.text("ESPECTRO DE SENAL DE RF", 11, bold=True)
     canvas.gap(4)
-    canvas.text("DS y US se imprimen cuando el portal de esta unidad los entrega.", 9, color=_MUTED)
+    canvas.text(
+        "El medidor grafico del espectro aparece en el HTML/PDF del navegador. "
+        "Aqui se resume la lectura y el desglose fisico.",
+        9,
+        color=_MUTED,
+    )
     canvas.gap(8)
     canvas.text("DESGLOSE DE CERTIFICACION FISICA", 11, bold=True)
     canvas.gap(6)
@@ -126,7 +132,23 @@ def _emta(canvas: _Canvas, report: CertificationReport, sheet: dict) -> None:
             canvas.rule()
         canvas.columns((row["name"], row["read"], row["expected"], row["state"]), physical_widths, state=row["state"])
         canvas.rule(light=True)
-    _note(canvas, report.disclaimer)
+    _note(canvas, f"Hoja 2/{pages}.")
+    canvas.page()
+    _masthead(canvas, f"TECHCORP — Canales RF · ORDEN: {sheet['order']} · Hoja 3/{pages}")
+    canvas.text("DETALLE DE CANALES RF — DOWNSTREAM", 11, bold=True)
+    canvas.gap(4)
+    _channel_table(canvas, "", sheet.get("ds_rows") or [], empty="Sin lectura de canales downstream en esta unidad.")
+    if sheet.get("ds_correctable_total") or sheet.get("ds_uncorrectable_total"):
+        canvas.text(
+            f"Total corregibles {sheet.get('ds_correctable_total') or '—'} · incorregibles {sheet.get('ds_uncorrectable_total') or '—'}",
+            8,
+            color=_MUTED,
+        )
+    canvas.gap(6)
+    canvas.text("DETALLE DE CANALES RF — UPSTREAM", 11, bold=True)
+    canvas.gap(4)
+    _channel_table(canvas, "", sheet.get("us_rows") or [], empty="Sin lectura de canales upstream en esta unidad.")
+    _note(canvas, f"Hoja 3/{pages}. {report.disclaimer}")
 
 
 def _matrix(canvas: _Canvas, report: CertificationReport, sheet: dict) -> None:

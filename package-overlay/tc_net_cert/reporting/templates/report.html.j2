@@ -66,7 +66,7 @@
     {% autoescape false %}{% include "logo.svg" %}{% endautoescape %}
     <div class="brand">
       <strong>TECHCORP</strong>
-      <span>REPORTE TÉCNICO DE CERTIFICACIÓN CPE — EMTA / DOCSIS</span>
+      <span>REPORTE TÉCNICO DE CERTIFICACIÓN CPE — EMTA / DOCSIS{% if sheet.docsis_version %} {{ sheet.docsis_version }}{% endif %}</span>
       <a href="https://www.techcorpca.com">www.techcorpca.com</a>
     </div>
   </header>
@@ -79,52 +79,75 @@
     <div>
       <p class="kicker">RESULTADO DE CERTIFICACIÓN</p>
       <h2 class="{{ 'fail' if not sheet.approved else '' }}">{{ sheet.headline }}</h2>
-      <p class="sub">{{ sheet.short_stamp }} · ID {{ sheet.record_id }} · {{ sheet.summary }} · Hoja 1/2</p>
+      <p class="sub">{{ sheet.short_stamp }} · ID {{ sheet.record_id }} · {{ sheet.summary }} · Hoja 1/{{ sheet.emta_page_count or 3 }}</p>
     </div>
     <div class="stamp {{ 'fail' if not sheet.approved else '' }}">{{ sheet.stamp }}</div>
   </div>
-  <h3>PARÁMETROS · LEÍDO VS ESPERADO</h3>
-  <p class="sub">{{ sheet.emta_tally }}</p>
+  <h3>PARÁMETROS · LEÍDO VS ESPERADO: {{ sheet.emta_tally }}</h3>
+  {% if sheet.emta_profile %}<p class="sub"><strong>{{ sheet.emta_profile }}</strong></p>{% endif %}
   <table>
     <thead>
       <tr><th>PARÁMETRO</th><th>LEÍDO</th><th>ESPERADO</th><th>CUMPLE</th></tr>
     </thead>
     <tbody>
-      {% set section = namespace(name="") %}
       {% for row in sheet.rows %}
-      {% if row.section != section.name %}
-      {% set section.name = row.section %}
-      <tr class="group"><td colspan="4">{{ row.section }}</td></tr>
-      {% endif %}
       <tr>
         <td>{{ row.name }}</td>
         <td>{{ row.read }}</td>
         <td>{{ row.expected }}</td>
-        <td class="state {{ 'pass' if row.state == 'Sí' else ('fail' if row.state == 'No' else 'not') }}">{{ row.state }}</td>
+        <td class="state {{ 'pass' if row.state == 'CUMPLE' else ('fail' if row.state == 'NO CUMPLE' else 'not') }}">{{ row.state }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
   <footer>
-    Documento generado por TECHCORP. © {{ sheet.year }} TECHCORP. Todos los derechos reservados. · www.techcorpca.com · Hoja 1/2
-    <br>Hoja 1/2. El throughput Wi-Fi 5.0 GHz y 2.4 GHz queda en QOS / TRÁFICO y no cambia el veredicto de los LAN.
-    <br>No certifica: {{ report.scope_exclusions | join(" · ") }}
+    Hoja 1/{{ sheet.emta_page_count or 3 }} · TECHCORP LAB · EMTA · © {{ sheet.year }} TECHCORP · www.techcorpca.com
+    <br>El throughput Wi-Fi 5.0 GHz y 2.4 GHz queda en la tabla anterior y no cambia el veredicto de los LAN.
     <br>{{ report.disclaimer }}
   </footer>
   <section class="sheet-2">
     <header>
       <div class="brand">
         <strong>TECHCORP — Anexo RF</strong>
-        <span>ORDEN: {{ sheet.order }} · Hoja 2/2</span>
+        <span>ORDEN: {{ sheet.order }} · Hoja 2/{{ sheet.emta_page_count or 3 }}</span>
       </div>
     </header>
-    <h3>DETALLE DE CANALES RF</h3>
+    {{ sheet.rf_chart | safe }}
+    <h3>DESGLOSE DE CERTIFICACIÓN FÍSICA</h3>
+    <table>
+      <thead>
+        <tr><th>PRUEBA</th><th>LEÍDO</th><th>CRITERIO</th><th>RESULTADO</th></tr>
+      </thead>
+      <tbody>
+        {% for row in sheet.physical_rows %}
+        <tr>
+          <td>{{ row.name }}</td>
+          <td>{{ row.read }}</td>
+          <td>{{ row.expected }}</td>
+          <td class="state {{ 'pass' if row.state == 'PASS' else ('fail' if row.state == 'FAIL' else ('obs' if row.state == 'OBSERVACION' else 'not')) }}">{{ row.state }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <footer>
+      Hoja 2/{{ sheet.emta_page_count or 3 }} · TECHCORP LAB · EMTA · © {{ sheet.year }} TECHCORP · www.techcorpca.com
+      <br>Verde: DS ≥ {{ 8 if sheet.docsis_version == '3.0' else 16 }}, RX −15…15 dBmV, US TX 30–61 dBmV. Rojo: fuera de ventana o MER &lt; 28 dB.
+      <br>{{ report.disclaimer }}
+    </footer>
+  </section>
+  <section class="sheet-2">
+    <header>
+      <div class="brand">
+        <strong>TECHCORP — Canales RF</strong>
+        <span>ORDEN: {{ sheet.order }} · Hoja 3/{{ sheet.emta_page_count or 3 }}</span>
+      </div>
+    </header>
+    <h3>DETALLE DE CANALES RF — DOWNSTREAM</h3>
     <table>
       <thead>
         <tr><th>CANAL</th><th>ESTADO</th><th>MODULACIÓN</th><th>ID / FRECUENCIA</th><th>POTENCIA</th><th>SNR</th><th>CORREGIBLES</th><th>INCORREGIBLES</th></tr>
       </thead>
       <tbody>
-        <tr class="group"><td colspan="8">DOWNSTREAM (DS)</td></tr>
         {% if sheet.ds_rows %}
         {% for row in sheet.ds_rows %}
         <tr>
@@ -148,7 +171,14 @@
         {% else %}
         <tr><td colspan="8">Sin lectura de canales downstream en esta unidad.</td></tr>
         {% endif %}
-        <tr class="group"><td colspan="8">UPSTREAM (US)</td></tr>
+      </tbody>
+    </table>
+    <h3>DETALLE DE CANALES RF — UPSTREAM</h3>
+    <table>
+      <thead>
+        <tr><th>CANAL</th><th>ESTADO</th><th>MODULACIÓN</th><th>ID / FRECUENCIA</th><th>POTENCIA</th><th>SNR</th><th>CORREGIBLES</th><th>INCORREGIBLES</th></tr>
+      </thead>
+      <tbody>
         {% if sheet.us_rows %}
         {% for row in sheet.us_rows %}
         <tr>
@@ -167,26 +197,9 @@
         {% endif %}
       </tbody>
     </table>
-    {{ sheet.rf_chart | safe }}
-    <h3>DESGLOSE DE CERTIFICACIÓN FÍSICA</h3>
-    <table>
-      <thead>
-        <tr><th>PRUEBA</th><th>LEÍDO</th><th>CRITERIO</th><th>RESULTADO</th></tr>
-      </thead>
-      <tbody>
-        {% for row in sheet.physical_rows %}
-        <tr>
-          <td>{{ row.name }}</td>
-          <td>{{ row.read }}</td>
-          <td>{{ row.expected }}</td>
-          <td class="state {{ 'pass' if row.state == 'PASS' else ('fail' if row.state == 'FAIL' else ('obs' if row.state == 'OBSERVACION' else 'not')) }}">{{ row.state }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
     <footer>
-      Documento generado por TECHCORP. © {{ sheet.year }} TECHCORP. Todos los derechos reservados. · www.techcorpca.com · Hoja 2/2
-      <br>Verde: DS ≥ 16, RX −10…10 dBmV, US TX 30–61 dBmV. Ámbar: DS 5–15 o un solo canal US. Rojo: DS ≤ 4, TX &lt; 30 dBmV o MER &lt; 28 dB. FEC ausente = NO_MEDIDO.
+      Hoja 3/{{ sheet.emta_page_count or 3 }} · TECHCORP LAB · EMTA · © {{ sheet.year }} TECHCORP · www.techcorpca.com
+      <br>{{ report.disclaimer }}
     </footer>
   </section>
 {% elif sheet.ont %}

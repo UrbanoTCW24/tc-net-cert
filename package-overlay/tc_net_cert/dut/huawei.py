@@ -27,6 +27,7 @@ MAC_ENV = "TC_NET_CERT_DUT_MAC"
 BRAND_ENV = "TC_NET_CERT_DUT_BRAND"
 MODEL_ENV = "TC_NET_CERT_DUT_MODEL"
 PORTALS_ENV = "TC_NET_CERT_PORTALS"
+PORTAL_MODULE_ENV = "TC_NET_CERT_PORTAL_MODULE"
 JOB_RE = re.compile(r"^JOB-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$")
 _USER_RE = re.compile(r"^[A-Za-z0-9._@-]{1,32}$")
 _IPV4 = re.compile(r"^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$")

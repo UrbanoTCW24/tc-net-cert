@@ -1846,6 +1846,11 @@
           ["HARDWARE", found.hardware],
           ["SOFTWARE", found.software],
           ["DOCSIS", found.docsis_status],
+          ["DOWNSTREAM", found.ds_channels],
+          ["UPSTREAM", found.us_channels],
+          ["DS POWER", found.ds_power],
+          ["US POWER", found.us_power],
+          ["MER / SNR", found.mer],
           ["MAC", found.mac ? String(found.mac).toUpperCase() : ""],
           ["RED WI-FI 2.4", found.ssid_24],
           ["CLAVE 2.4", found.wifi_password_24],
@@ -2520,9 +2525,12 @@
         document.getElementById("identity-line").textContent = wifiReady
           ? "Lectura lista, con SSID 2.4, SSID 5 y sus claves. La medición en vivo arranca con Iniciar Certificación."
           : "Lectura lista, pero faltan SSID o claves de 2.4 y 5 GHz.";
-        const done = wifiReady
+        let done = wifiReady
           ? "Lectura lista. Revisa la ficha y pulsa Iniciar Certificación."
           : "La ficha no trajo los SSID o las claves Wi-Fi.";
+        if (found.throughput_lan_prepare) {
+          done += " " + String(found.throughput_lan_prepare);
+        }
         feedback.textContent = done;
         setPortalFeedback(done);
       } else {
@@ -2578,15 +2586,39 @@
       paintBenchHeader(benchId, data);
     }
 
+    const emtaRfKeys = [
+      "docsis_status",
+      "ds_channels",
+      "us_channels",
+      "ds_power",
+      "us_power",
+      "mer",
+      "throughput_lan_prepare",
+    ];
+
+    function mergeBenchInventory(benchId, row) {
+      const prev = benchInventories[benchId] || {};
+      const merged = Object.assign({}, prev, row || {});
+      for (const key of emtaRfKeys) {
+        const incoming = row && row[key] ? String(row[key]).trim() : "";
+        const kept = prev[key] ? String(prev[key]).trim() : "";
+        if (!incoming && kept) {
+          merged[key] = prev[key];
+        }
+      }
+      return merged;
+    }
+
     function applyBenchReadings(map) {
       if (!map || typeof map !== "object") return;
       for (const benchId of ["A", "B"]) {
         const row = map[benchId];
         if (!hasFullInventory(row)) continue;
-        benchInventories[benchId] = Object.assign({}, row);
-        benchIdentities[benchId] = Object.assign({}, benchIdentities[benchId] || {}, row);
-        paintBenchHeader(benchId, row);
-        paintReadingBench(benchId, row);
+        const merged = mergeBenchInventory(benchId, row);
+        benchInventories[benchId] = merged;
+        benchIdentities[benchId] = Object.assign({}, benchIdentities[benchId] || {}, merged);
+        paintBenchHeader(benchId, merged);
+        paintReadingBench(benchId, merged);
       }
       saveBenchInventoryToStorage();
     }
@@ -2754,8 +2786,12 @@
         .map((row) => "Banco " + row.bench_id + ": " + row.error);
       if (okCount) {
         const scopeLabel = mode === "all" ? okCount + " banco(s)" : "banco " + (successIds[0] || mode);
+        const lanPrep = items
+          .filter((row) => row.ok && row.throughput_lan_prepare)
+          .map((row) => "Banco " + row.bench_id + ": " + row.throughput_lan_prepare);
         setPortalFeedback(
           "Inventario listo en " + scopeLabel + ". Revisa la lectura abajo."
+          + (lanPrep.length ? " " + lanPrep.join(" ") : "")
           + (errors.length ? " " + errors.join(" ") : "")
         );
       } else {

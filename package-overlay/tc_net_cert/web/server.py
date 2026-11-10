@@ -939,6 +939,7 @@ def _handler(
                     identity=_identity_env(body),
                     bench_id=bench_id,
                     bench_credentials=bench_credentials,
+                    portal_module=portal_module,
                 )
             except (ConsoleBusy, ValueError) as exc:
                 self._json(409, {"ok": False, "error": str(exc), **_status_payload(root, console, monitor, ports)})

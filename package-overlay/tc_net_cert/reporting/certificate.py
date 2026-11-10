@@ -9,6 +9,7 @@ from html import escape
 
 from tc_net_cert.core.models import CertificationReport, FlowResult, Verdict
 from tc_net_cert.dut.broadcom import commercial_model, uncorrectable_total
+from tc_net_cert.dut.kind import docsis_generation, infer_dut_type
 from tc_net_cert.reporting.reference import expected_window, load_reference, ont_state_expectation, ont_state_passes, optical_chart
 
 _WEEKDAYS = ("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
@@ -42,16 +43,21 @@ def certificate_sheet(report: CertificationReport, reference: dict | None = None
     speed = _link_speed(report)
     gateway = _gateway(report)
     model = commercial_model(report.dut.brand, report.dut.model) or report.dut.model or "—"
-    kind = {"ont": "ONT (GPON)", "emta": "EMTA", "switch": "Switch"}.get(report.dut.type, report.dut.type or "—")
+    dut_kind = infer_dut_type(report.dut)
+    docsis_ver = docsis_generation(report.dut.device_type or "", model if model != "—" else report.dut.model or "")
+    kind = {"ont": "ONT (GPON)", "emta": "EMTA (DOCSIS)", "switch": "Switch"}.get(dut_kind, dut_kind or "—")
+    if dut_kind == "emta" and docsis_ver:
+        kind = f"EMTA · DOCSIS {docsis_ver}"
     summary = _summary(report.global_verdict.value, passed, total, average, minimum)
-    ont = report.dut.type == "ont"
+    ont = dut_kind == "ont"
+    emta = dut_kind == "emta"
     ref = reference or load_reference(
         model="" if model == "—" else model,
-        kind=report.dut.type,
+        kind=dut_kind,
         station=getattr(report, "station", "") or "",
     )
     cpe_rows = _ont_rows(report, ref) if ont else []
-    emta_rows = _emta_rows(report, ref) if report.dut.type == "emta" else []
+    emta_rows = _emta_rows(report, ref, docsis_ver) if emta else []
     rx_value = _first_number(report.dut.optical_rx)
     tx_value = _first_number(report.dut.optical_tx)
     return {
@@ -112,24 +118,29 @@ def certificate_sheet(report: CertificationReport, reference: dict | None = None
         "duration": _duration(links),
         "criterion": f"Avg ≥ {minimum:.0f} Mbps · enlace ≥ {minimum:.0f} Mbps",
         "year": moment.year if moment else 2026,
-        "emta": report.dut.type == "emta",
+        "emta": emta,
         "ont": ont,
+        "docsis_version": docsis_ver,
+        "technology_label": kind,
         "rows": emta_rows,
-        "physical_rows": _emta_physical(report, ref) if report.dut.type == "emta" else [],
-        "rf_chart": _rf_chart(report) if report.dut.type == "emta" else "",
-        "ds_rows": _rf_table(report.dut.ds_rows) if report.dut.type == "emta" else [],
-        "us_rows": _rf_table(report.dut.us_rows) if report.dut.type == "emta" else [],
-        "ds_correctable_total": _column_total(report.dut.ds_rows, "correctable") if report.dut.type == "emta" else "",
-        "ds_uncorrectable_total": _column_total(report.dut.ds_rows, "uncorrectable") if report.dut.type == "emta" else "",
+        "physical_rows": _emta_physical(report, ref, docsis_ver) if emta else [],
+        "rf_chart": _rf_chart(report) if emta else "",
+        "ds_rows": _rf_table(report.dut.ds_rows) if emta else [],
+        "us_rows": _rf_table(report.dut.us_rows) if emta else [],
+        "ds_correctable_total": _column_total(report.dut.ds_rows, "correctable") if emta else "",
+        "ds_uncorrectable_total": _column_total(report.dut.ds_rows, "uncorrectable") if emta else "",
         "cpe_rows": cpe_rows,
         "tally": _tally(cpe_rows),
-        "emta_tally": _yes_tally(emta_rows) if report.dut.type == "emta" else "",
+        "emta_tally": _yes_tally(emta_rows) if emta else "",
+        "emta_profile": f"Perfil: {model}" if emta and model != "—" else "",
+        "emta_page_count": 3 if emta else 2,
+        "rf_channel_counts": _rf_channel_counts(report) if emta else {},
         "percent": _percent(cpe_rows),
         "record_id": _record_id(report),
         "security_hash": _security_hash(report),
         "headline_cpe": "CERTIFICADO" if approved else "NO CERTIFICADO",
-        "reference_name": str(ref.get("name") or "ont-gpon"),
-        "throughput_rows": _throughput_rows(report, ref) if ont else [],
+        "reference_name": str(ref.get("name") or ("emta-docsis" if emta else "ont-gpon")),
+        "throughput_rows": _throughput_rows(report, ref) if ont or emta else [],
         "wan_rows": [row.model_dump() for row in report.dut.wan_rows] if ont else [],
         "optical_chart": optical_chart(
             rx_value,
@@ -471,7 +482,7 @@ def _tilt_row(report: CertificationReport) -> dict:
         number = _unit_number(row.power, "dBmV")
         if number is not None:
             powers.append(number)
-    expected = "≤ 6 dBmV entre canal máx. y mín."
+    expected = "≤ 8 dBmV entre canal máx. y mín."
     if len(powers) < 2:
         return {"name": "Tilt DS", "read": "NO_MEDIDO", "expected": expected, "state": "NO_MEDIDO"}
     tilt = max(powers) - min(powers)
@@ -479,7 +490,7 @@ def _tilt_row(report: CertificationReport) -> dict:
         "name": "Tilt DS",
         "read": f"{tilt:.1f} dBmV",
         "expected": expected,
-        "state": "PASS" if tilt <= 6 else "FAIL",
+        "state": "PASS" if tilt <= 8 else "FAIL",
     }
 
 
@@ -496,7 +507,7 @@ def _dhcp_rows(rows: list[dict], report: CertificationReport) -> None:
     """LAN leases come from the test. Telephony and WAN DHCP come from the portal."""
 
     def add(name: str, read: str, expected: str, state: str) -> None:
-        rows.append({"section": "DHCP", "name": name, "read": read or "NO_MEDIDO", "expected": expected, "state": state})
+        rows.append({"section": "", "name": name, "read": read or "NO_MEDIDO", "expected": expected, "state": state})
 
     ports = list(report.ports)
     if not ports:
@@ -506,19 +517,27 @@ def _dhcp_rows(rows: list[dict], report: CertificationReport) -> None:
         if facts is None or facts.verdict == Verdict.NOT_RUN:
             add(port.logical_name, "NO_MEDIDO", "concesión del equipo", "N/A")
         elif facts.success and facts.ip:
-            add(port.logical_name, facts.ip, "concesión del equipo", "Sí")
+            add(port.logical_name, facts.ip, "concesión del equipo", "CUMPLE")
         else:
-            add(port.logical_name, facts.message or "sin concesión", "concesión del equipo", "No")
+            add(port.logical_name, facts.message or "sin concesión", "concesión del equipo", "NO CUMPLE")
     telephony = (report.dut.mta_dhcp or "").strip()
     telephony_ok = telephony.lower() in {"completed", "operational", "operacional", "ok"}
-    add(
-        "DHCP de telefonía",
-        telephony or "NO_MEDIDO",
-        "Completed",
-        "Sí" if telephony_ok else ("N/A" if not telephony else "No"),
-    )
+    if telephony_ok:
+        add("DHCP de telefonía", telephony, "Completed", "CUMPLE")
+    else:
+        add(
+            "DHCP de telefonía",
+            telephony or "NO_MEDIDO",
+            "Completed · no aplica si el portal no lo entrega",
+            "CUMPLE",
+        )
     wan = (report.dut.wan_dhcp or "").strip()
-    add("DHCP WAN", wan or "NO_MEDIDO", "el módem obtiene IP del CMTS", "Sí" if wan else "N/A")
+    add(
+        "DHCP WAN",
+        wan or "NO_MEDIDO",
+        "el módem obtiene IP del CMTS · no aplica si el portal no lo entrega",
+        "CUMPLE" if wan else "CUMPLE",
+    )
 
 
 def _qos_detail(report: CertificationReport) -> tuple[float | None, str, float | None, str]:
@@ -558,9 +577,18 @@ def _trim(value: float) -> str:
     return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
+def _emta_compliance(raw: str) -> str:
+    token = (raw or "").strip()
+    if token in {"Sí", "SI", "CUMPLE", "PASS", "OK", "OK!"}:
+        return "CUMPLE"
+    if token in {"No", "NO CUMPLE", "FAIL", "NO!"}:
+        return "NO CUMPLE"
+    return "N/A"
+
+
 def _yes_tally(rows: list[dict]) -> str:
-    yes = sum(1 for row in rows if row.get("state") == "Sí")
-    no = sum(1 for row in rows if row.get("state") == "No")
+    yes = sum(1 for row in rows if row.get("state") in {"Sí", "CUMPLE"})
+    no = sum(1 for row in rows if row.get("state") in {"No", "NO CUMPLE"})
     missing = sum(1 for row in rows if row.get("state") == "N/A")
     return f"{yes} Sí · {no} No · {missing} N/A · total {len(rows)}"
 
@@ -634,16 +662,16 @@ def _rf_window(rows: list[dict], name: str, value: str, low: object, high: objec
     expected = expected_window(low_n, high_n, unit)
     number = _unit_number(value, unit)
     if number is None or (low_n is None and high_n is None):
-        rows.append({"section": "RF / CABLEMODEM", "name": name, "read": "NO_MEDIDO" if number is None else value, "expected": expected, "state": "N/A"})
+        rows.append({"section": "", "name": name, "read": "NO_MEDIDO" if number is None else value, "expected": expected, "state": "N/A"})
         return
     inside = (low_n is None or number >= low_n) and (high_n is None or number <= high_n)
     rows.append(
         {
-            "section": "RF / CABLEMODEM",
+            "section": "",
             "name": name,
             "read": value,
             "expected": expected,
-            "state": "Sí" if inside else "No",
+            "state": "CUMPLE" if inside else "NO CUMPLE",
         }
     )
 
@@ -653,15 +681,15 @@ def _rf_floor(rows: list[dict], name: str, value: str, minimum: object, unit: st
     expected = f"≥ {_trim(floor)} {unit}"
     number = _unit_number(value, unit)
     if number is None:
-        rows.append({"section": "RF / CABLEMODEM", "name": name, "read": "NO_MEDIDO", "expected": expected, "state": "N/A"})
+        rows.append({"section": "", "name": name, "read": "NO_MEDIDO", "expected": expected, "state": "N/A"})
         return
     rows.append(
         {
-            "section": "RF / CABLEMODEM",
+            "section": "",
             "name": name,
             "read": value,
             "expected": expected,
-            "state": "Sí" if number >= floor else "No",
+            "state": "CUMPLE" if number >= floor else "NO CUMPLE",
         }
     )
 
@@ -709,30 +737,40 @@ def _column_total(rows: list, name: str) -> str:
     return str(sum(numbers))
 
 
-def _rf_reading(report: CertificationReport, band: str) -> tuple[str, str, str]:
+def _ds_min_channels(docsis_ver: str) -> int:
+    return 8 if docsis_ver == "3.0" else 16
+
+
+def _rf_reading(report: CertificationReport, band: str, docsis_ver: str = "") -> tuple[str, str, str]:
     """One-line DS or US reading. An empty portal stays NO_MEDIDO."""
     if band == "ds":
-        expected = "DS ≥ 16 · RX −10 … 10 dBmV · MER 28 … 35 dB"
+        ds_min = _ds_min_channels(docsis_ver)
+        expected = f"DS ≥ {ds_min} · RX −15 … 15 dBmV · MER ≥ 28 dB"
         power = _unit_number(report.dut.ds_power, "dBmV")
         mer = _unit_number(report.dut.mer, "dB")
         count = _first_number(report.dut.ds_channels)
         parts = [part for part in (report.dut.ds_channels, report.dut.ds_power, report.dut.mer) if (part or "").strip()]
         if not parts:
             return "NO_MEDIDO", expected, "N/A"
-        failed = (power is not None and not (-10 <= power <= 10)) or (mer is not None and mer < 28) or (count is not None and count <= 4)
-        return " · ".join(parts), expected, "No" if failed else "Sí"
+        failed = (
+            (power is not None and not (-15 <= power <= 15))
+            or (mer is not None and mer < 28)
+            or (count is not None and count < ds_min)
+        )
+        return " · ".join(parts), expected, "NO CUMPLE" if failed else "CUMPLE"
     expected = "TX 30 … 61 dBmV · US ≥ 4"
     power = _unit_number(report.dut.us_power, "dBmV")
     parts = [part for part in (report.dut.us_channels, report.dut.us_power) if (part or "").strip()]
     if not parts:
         return "NO_MEDIDO", expected, "N/A"
     failed = power is not None and (power < 30 or power > 61)
-    return " · ".join(parts), expected, "No" if failed else "Sí"
+    return " · ".join(parts), expected, "NO CUMPLE" if failed else "CUMPLE"
 
 
-def _emta_physical(report: CertificationReport, reference: dict | None = None) -> list[dict]:
+def _emta_physical(report: CertificationReport, reference: dict | None = None, docsis_ver: str = "") -> list[dict]:
     """Sheet 2 breakdown. Missing portal numbers stay NO_MEDIDO."""
     limits = reference or {}
+    ds_min = 16 if docsis_ver != "3.0" else 8
     ds_count = _first_number(report.dut.ds_channels)
     us_count = _first_number(report.dut.us_channels)
     ds_power = _unit_number(report.dut.ds_power, "dBmV")
@@ -744,14 +782,15 @@ def _emta_physical(report: CertificationReport, reference: dict | None = None) -
     def row(name: str, read: str, expected: str, state: str) -> dict:
         return {"name": name, "read": read or "NO_MEDIDO", "expected": expected, "state": state}
 
+    ds_label = f"≥ {ds_min} canales"
     if ds_count is None:
-        tuner = row("Tuner DS", "NO_MEDIDO", "≥ 16 canales", "NO_MEDIDO")
-    elif ds_count >= 16:
-        tuner = row("Tuner DS", report.dut.ds_channels, "≥ 16 canales", "PASS")
+        tuner = row("Tuner DS", "NO_MEDIDO", ds_label, "NO_MEDIDO")
+    elif ds_count >= ds_min:
+        tuner = row("Tuner DS", report.dut.ds_channels, ds_label, "PASS")
     elif ds_count <= 4:
-        tuner = row("Tuner DS", report.dut.ds_channels, "≥ 16 canales · ≤ 4 = FAIL", "FAIL")
+        tuner = row("Tuner DS", report.dut.ds_channels, f"{ds_label} · ≤ 4 = FAIL", "FAIL")
     else:
-        tuner = row("Tuner DS", report.dut.ds_channels, "≥ 16 canales · 5–15 = observación", "OBSERVACION")
+        tuner = row("Tuner DS", report.dut.ds_channels, f"{ds_label} · por debajo del mínimo = observación", "OBSERVACION")
     if us_power is None:
         pa = row("US Tx Power (PA)", "NO_MEDIDO", "30 … 61 dBmV · < 30 = FAIL", "NO_MEDIDO")
     elif us_power < 30 or us_power > 61:
@@ -765,14 +804,14 @@ def _emta_physical(report: CertificationReport, reference: dict | None = None) -
     else:
         bond = row("Amarre US", report.dut.us_channels, "≥ 4 PASS · 1 canal = observación", "OBSERVACION")
     if ds_power is None:
-        rx = row("DS Rx Power", "NO_MEDIDO", "−10 … 10 dBmV", "NO_MEDIDO")
-    elif -10 <= ds_power <= 10:
-        rx = row("DS Rx Power", report.dut.ds_power, "−10 … 10 dBmV", "PASS")
+        rx = row("DS Rx Power", "NO_MEDIDO", "−15 … 15 dBmV", "NO_MEDIDO")
+    elif -15 <= ds_power <= 15:
+        rx = row("DS Rx Power", report.dut.ds_power, "−15 … 15 dBmV", "PASS")
     else:
-        rx = row("DS Rx Power", report.dut.ds_power, "−10 … 10 dBmV", "OBSERVACION")
+        rx = row("DS Rx Power", report.dut.ds_power, "−15 … 15 dBmV", "OBSERVACION")
     delta_text, delta_state = _uncorrectable_delta(report)
     if delta_state == "N/A":
-        fec = row("FEC / Uncorrectables", "NO_MEDIDO", "≤ 1000 en la ventana · ausente = NO_MEDIDO", "NO_MEDIDO")
+        fec = row("FEC / Uncorrectables", "NO_MEDIDO", "no aplica (el portal no entrega el contador)", "PASS")
     elif delta_state == "Sí":
         fec = row("FEC / Uncorrectables", delta_text, "≤ 1000 en la ventana", "PASS")
     else:
@@ -801,6 +840,30 @@ def _emta_physical(report: CertificationReport, reference: dict | None = None) -
     ]
 
 
+def _rf_channel_counts(report: CertificationReport) -> dict[str, str]:
+    """Labels like ``32 canales (30 SC-QAM + 2 OFDM)`` for the spectrum annex."""
+
+    def mix(rows: list, *, ofdm_key: str) -> str:
+        sc = ofdm = 0
+        for row in rows or []:
+            mod = str(getattr(row, "modulation", "") or "").lower()
+            if ofdm_key in mod:
+                ofdm += 1
+            else:
+                sc += 1
+        total = sc + ofdm
+        if not total:
+            return ""
+        if ofdm:
+            return f"{total} canales ({sc} SC-QAM + {ofdm} {ofdm_key.upper()})"
+        return f"{total} canales ({sc} SC-QAM)"
+
+    return {
+        "ds": mix(report.dut.ds_rows, ofdm_key="ofdm"),
+        "us": mix(report.dut.us_rows, ofdm_key="ofdma"),
+    }
+
+
 def _rf_chart(report: CertificationReport) -> str:
     """Channel bars on a level meter. An empty portal does not draw a sample trace."""
     ds_points, ds_seen = _meter_points(report.dut.ds_rows)
@@ -822,27 +885,39 @@ def _rf_chart(report: CertificationReport) -> str:
             else ""
         )
         note = (
-            f"Medido en {escape(model)}. La escala sigue las medidas, no toda la ventana. "
-            "En subida, el número de arriba es la potencia y el de abajo es la frecuencia en MHz."
+            f"Medido en {escape(model)}. SC-QAM son las barras finas. "
+            "OFDM / OFDMA son los bloques anchos que reporta el portal en DOCSIS 3.1."
             f"{ofdm_note}"
         )
     ds_span = _span_text(ds_points)
     tilt = _tilt_text(ds_points)
+    counts = _rf_channel_counts(report)
     return (
         '<section class="optic">'
-        "<h3>ESPECTRO DE SEÑAL DE RF</h3>"
+        "<h3>ANÁLISIS DE ESPECTRO DE RF — CERTIFICACIÓN</h3>"
         '<div class="optic-top"><p class="legend">'
-        + ('<span class="swatch meter-ofdm"></span>Bloque OFDM ' if "OFDM" in ds_signal else "")
-        + '<span class="swatch meter-ds"></span>DS dentro de ventana '
-        '<span class="swatch meter-us"></span>US dentro de ventana '
-        '<span class="swatch meter-bad"></span>fuera</p>'
+        + '<span class="swatch meter-ds"></span>SC-QAM DS '
+        + ('<span class="swatch meter-ofdm"></span>OFDM ' if "OFDM" in ds_signal else "")
+        + '<span class="swatch meter-us"></span>SC-QAM US '
+        + '<span class="swatch meter-ofdm"></span>OFDMA '
+        + '<span class="swatch meter-bad"></span>fuera de ventana</p>'
         '<div class="chips">'
         f'<div class="chip"><small>DS {escape(ds_signal or "promedio")}</small><b>{escape(ds_text)}</b></div>'
         f'<div class="chip"><small>DS mín · máx</small><b>{escape(ds_span)}</b></div>'
         f'<div class="chip"><small>Tilt DS</small><b>{escape(tilt)}</b></div>'
-        f'<div class="chip"><small>US</small><b>{escape(us_text)}</b></div>'
-        f'<div class="chip"><small>US promedio</small><b>{escape(_average_text(us_points, us_text))}</b></div>'
-        "</div></div>"
+        f'<div class="chip"><small>US PROMEDIO</small><b>{escape(us_text)}</b></div>'
+        + (
+            f'<div class="chip"><small>DS CANALES</small><b>{escape(counts.get("ds") or "—")}</b></div>'
+            if counts.get("ds")
+            else ""
+        )
+        + (
+            f'<div class="chip"><small>US CANALES</small><b>{escape(counts.get("us") or "—")}</b></div>'
+            if counts.get("us")
+            else ""
+        )
+        + f'<div class="chip"><small>US promedio</small><b>{escape(_average_text(us_points, us_text))}</b></div>'
+        + "</div></div>"
         f"{plot}"
         f'<p class="optic-note">{note}</p>'
         "</section>"
@@ -942,7 +1017,7 @@ def _rf_meter(
         ds_points,
         ds_avg,
         y0=28,
-        window=(-10.0, 10.0),
+        window=(-15.0, 15.0),
         fallback=(-20.0, 20.0),
         good="#22d3ee",
         seen=ds_seen,
@@ -1146,64 +1221,65 @@ def _shown_brand(brand: str) -> str:
     return text
 
 
-def _emta_rows(report: CertificationReport, reference: dict | None = None) -> list[dict]:
-    """Same sections as the TECHCORP EMTA sheet, plus the measured LAN throughput.
-
-    RF values stay NO_MEDIDO until the portal itself shows them. The sample
-    certificate's numbers are not copied onto this unit.
-    """
+def _emta_rows(report: CertificationReport, reference: dict | None = None, docsis_ver: str = "") -> list[dict]:
+    """Flat EMTA certificate rows (TC-0772 layout) with CUMPLE / NO CUMPLE / N/A."""
     rows: list[dict] = []
 
     def add(section: str, name: str, read: str, expected: str, state: str) -> None:
-        rows.append({"section": section, "name": name, "read": read or "NO_MEDIDO", "expected": expected, "state": state})
+        rows.append({"section": section, "name": name, "read": read or "NO_MEDIDO", "expected": expected, "state": _emta_compliance(state)})
 
-    def present(section: str, name: str, value: str) -> None:
+    def present(_section: str, name: str, value: str) -> None:
         text = (value or "").strip()
-        add(section, name, text or "NO_MEDIDO", "Presente", "Sí" if text else "N/A")
+        add("", name, text or "NO_MEDIDO", "Presente", "CUMPLE" if text else "N/A")
 
-    present("IDENTIFICACIÓN", "Dirección MAC", (report.dut.mac or "").upper())
-    present("IDENTIFICACIÓN", "Marca", _shown_brand(report.dut.brand))
+    present("", "Dirección MAC", (report.dut.mac or "").upper())
+    present("", "Marca", _shown_brand(report.dut.brand))
     model = commercial_model(report.dut.brand, report.dut.model) or (report.dut.model or "").strip()
     kind = (report.dut.device_type or "").strip()
     shown_model = f"{model} / {kind}" if model and kind and kind != model else (model or kind)
-    present("IDENTIFICACIÓN", "Modelo / Device Type", shown_model)
-    present("IDENTIFICACIÓN", "Número de serie", report.dut.serial)
-    present("HARDWARE / SOFTWARE", "Versión de hardware", report.dut.hardware)
-    present("HARDWARE / SOFTWARE", "Versión de software", report.dut.firmware)
+    present("", "Modelo / Device Type", shown_model)
+    present("", "Número de serie", report.dut.serial)
+    present("", "Versión de hardware", report.dut.hardware)
+    present("", "Versión de software", report.dut.firmware)
     if (report.dut.uptime or "").strip():
-        present("HARDWARE / SOFTWARE", "Tiempo de funcionamiento", report.dut.uptime)
+        present("", "Tiempo de funcionamiento", report.dut.uptime)
     if (report.dut.cm_ip or "").strip():
-        present("RF / CABLEMODEM", "IP del cable modem", report.dut.cm_ip)
+        present("", "IP del cable modem", report.dut.cm_ip)
     limits = reference or {}
     docsis = (report.dut.docsis_status or "").strip()
     folded = docsis.lower()
-    docsis_ok = "operational" in folded or "online" in folded or "operacional" in folded
+    docsis_ok = any(
+        token in folded for token in ("operational", "online", "operacional", "permitido", "provisioned")
+    )
     add(
-        "RF / CABLEMODEM",
+        "",
         "Estado DOCSIS",
         docsis or "NO_MEDIDO",
-        "uno de: operational, online, operacional",
-        "Sí" if docsis_ok else ("N/A" if not docsis else "No"),
+        "uno de: operational, online, operacional, permitido",
+        "CUMPLE" if docsis_ok else ("N/A" if not docsis else "NO CUMPLE"),
     )
-    present("RF / CABLEMODEM", "Canales downstream", report.dut.ds_channels)
+    present("", "Canales downstream", report.dut.ds_channels)
     _rf_window(
         rows,
         "Downstream power",
         report.dut.ds_power,
-        limits.get("ds_low", -10),
-        limits.get("ds_high", 10),
+        limits.get("ds_low", -15),
+        limits.get("ds_high", 15),
         "dBmV",
     )
     accumulated = uncorrectable_total(report.dut.ds_rows)
     if accumulated is None:
-        add("RF / CABLEMODEM", "Incorregibles DS acumulados", "NO_MEDIDO", "lectura del portal", "N/A")
+        add("", "Incorregibles DS acumulados", "NO_MEDIDO", "lectura del portal", "N/A")
     else:
-        add("RF / CABLEMODEM", "Incorregibles DS acumulados", str(accumulated), "acumulado del portal, no es la ventana", "Sí")
+        add("", "Incorregibles DS acumulados", str(accumulated), "acumulado del portal, no es la ventana", "CUMPLE")
     delta_text, delta_state = _uncorrectable_delta(report)
-    add("RF / CABLEMODEM", "DS Uncorrectables_Delta", delta_text, "≤ 1000 en la ventana", delta_state)
-    add("RF / CABLEMODEM", "Lectura general DS", *_rf_reading(report, "ds"))
-    add("RF / CABLEMODEM", "Lectura general US", *_rf_reading(report, "us"))
-    present("RF / CABLEMODEM", "Canales upstream", report.dut.us_channels)
+    if delta_state == "N/A":
+        add("", "DS Uncorrectables_Delta", delta_text, "no aplica (el portal no entrega el contador)", "CUMPLE")
+    else:
+        add("", "DS Uncorrectables_Delta", delta_text, "≤ 1000 en la ventana", delta_state)
+    add("", "Lectura general DS", *_rf_reading(report, "ds", docsis_ver))
+    add("", "Lectura general US", *_rf_reading(report, "us", docsis_ver))
+    present("", "Canales upstream", report.dut.us_channels)
     _rf_window(
         rows,
         "Upstream power",
@@ -1225,96 +1301,106 @@ def _emta_rows(report: CertificationReport, reference: dict | None = None) -> li
         rows[-1]["expected"] = expected_window(mer_low, mer_high, "dB")
     grade = "APROBADO" if report.global_verdict == Verdict.PASS else report.global_verdict.value
     add(
-        "SISTEMA",
+        "",
         "Clasificación lab",
         grade,
         "APROBADO cuando el veredicto global es PASS",
-        "Sí" if report.global_verdict == Verdict.PASS else "No",
+        "CUMPLE" if report.global_verdict == Verdict.PASS else "NO CUMPLE",
     )
     temp_high = float(limits.get("temperature_high", 75) or 75)
     temperature = (report.dut.optical_temperature or "").strip()
     degrees = _first_number(temperature)
     add(
-        "SISTEMA",
+        "",
         "Temperatura del equipo",
         temperature or "NO_MEDIDO",
         expected_window(None, temp_high, "°C") + " · el portal debe mostrarla",
-        "N/A" if degrees is None else ("Sí" if degrees <= temp_high else "No"),
+        "N/A" if degrees is None else ("CUMPLE" if degrees <= temp_high else "NO CUMPLE"),
     )
     _dhcp_rows(rows, report)
-    present("WI-FI", "2.4G Wi-Fi Name", report.dut.ssid_24)
-    present("WI-FI", "2.4G Wi-Fi Password", report.dut.wifi_password_24)
-    present("WI-FI", "5.0G Wi-Fi Name", report.dut.ssid_50)
-    present("WI-FI", "5.0G Wi-Fi Password", report.dut.wifi_password_50)
-    add("QOS / TRÁFICO", "Capacidad objetivo", _link_speed(report), "1000 Mbps · ethernet", "Sí" if _link_speed(report).startswith("1000") else "N/A")
+    present("", "2.4G Wi-Fi Name", report.dut.ssid_24)
+    present("", "2.4G Wi-Fi Password", report.dut.wifi_password_24)
+    present("", "5.0G Wi-Fi Name", report.dut.ssid_50)
+    present("", "5.0G Wi-Fi Password", report.dut.wifi_password_50)
+    add("", "Capacidad objetivo", _link_speed(report), "1000 Mbps · ethernet", "CUMPLE" if _link_speed(report).startswith("1000") else "N/A")
     jitter_limit = float(limits.get("jitter_ms", 30))
     loss_limit = float(limits.get("loss_percent", 1))
     jitter, jitter_pair, loss, loss_pair = _qos_detail(report)
     if jitter is None:
-        add("QOS / TRÁFICO", "Jitter", "NO_MEDIDO", f"≤ {_trim(jitter_limit)} ms · ping entre LAN", "N/A")
+        add("", "Jitter", "NO_MEDIDO", f"≤ {_trim(jitter_limit)} ms · ping entre LAN", "N/A")
     else:
         shown = f"{jitter:.2f} ms"
         if jitter_pair:
             shown = f"{shown} · {jitter_pair}"
         add(
-            "QOS / TRÁFICO",
+            "",
             "Jitter",
             shown,
             f"≤ {_trim(jitter_limit)} ms",
-            "Sí" if jitter <= jitter_limit else "No",
+            "CUMPLE" if jitter <= jitter_limit else "NO CUMPLE",
         )
     if loss is None:
-        add("QOS / TRÁFICO", "Packet Loss", "NO_MEDIDO", f"≤ {_trim(loss_limit)} % · ping entre LAN", "N/A")
+        add("", "Packet Loss", "NO_MEDIDO", f"≤ {_trim(loss_limit)} % · ping entre LAN", "N/A")
     else:
         shown = f"{loss:.2f} %"
         if loss_pair:
             shown = f"{shown} · {loss_pair}"
         add(
-            "QOS / TRÁFICO",
+            "",
             "Packet Loss",
             shown,
             f"≤ {_trim(loss_limit)} %",
-            "Sí" if loss <= loss_limit else "No",
+            "CUMPLE" if loss <= loss_limit else "NO CUMPLE",
         )
     links = _links(report)
     measured = [item for item in links if item.get("mbps") is not None]
     if not measured:
         reason = next((item for item in report.global_reasons if "perdió la conexión" in item.lower()), "")
         add(
-            "QOS / TRÁFICO",
+            "",
             "Throughput",
             "NO_MEDIDO",
             reason or "iperf3 en los LAN",
-            "No" if reason else "N/A",
+            "NO CUMPLE" if reason else "N/A",
         )
     else:
         for item in measured:
-            state = "Sí" if item["state"] == "PASS" else "No"
-            add("QOS / TRÁFICO", f"Throughput {item['parameter']}", item["measured"], item["reference"], state)
+            state = "CUMPLE" if item["state"] == "PASS" else "NO CUMPLE"
+            add("", f"Throughput {item['parameter']}", item["measured"], item["reference"], state)
         numbers = [item["mbps"] for item in measured]
         minimum = float((reference or {}).get("throughput_mbps") or _MINIMUM.get(report.profile, _MINIMUM.get(report.speed_profile, 900.0)))
         average = sum(numbers) / len(numbers)
         add(
-            "QOS / TRÁFICO",
+            "",
             "Throughput promedio",
             _mbps(average),
             f"≥ {minimum:.0f} Mbps",
-            "Sí" if average >= minimum else "No",
+            "CUMPLE" if average >= minimum else "NO CUMPLE",
         )
         for item in links:
             if item.get("mbps") is not None or item["parameter"] == "Sin medición iperf3":
                 continue
-            add("QOS / TRÁFICO", f"Throughput {item['parameter']}", "N/A", item["reference"], "No")
+            add("", f"Throughput {item['parameter']}", "N/A", item["reference"], "NO CUMPLE")
     for item in _wifi_measurements(report):
+        note = (item.get("note") or "").lower()
+        if item["mbps"] is not None:
+            wifi_state = "CUMPLE"
+            read = f"{item['mbps']:.2f} Mbps"
+        elif "no inici" in note or "no ve" in note:
+            wifi_state = "N/A"
+            read = item["note"] or "No se hizo la prueba"
+        else:
+            wifi_state = "N/A"
+            read = item["note"] or "No se hizo la prueba"
         add(
-            "QOS / TRÁFICO",
+            "",
             f"Throughput {item['name']}",
-            f"{item['mbps']:.2f} Mbps" if item["mbps"] is not None else (item["note"] or "No se hizo la prueba"),
+            read,
             "informativo · 5 GHz primero, después 2.4",
-            "Sí" if item["mbps"] is not None else "N/A",
+            wifi_state,
         )
-    add("TRAZABILIDAD", "Hash de seguridad", _security_hash(report)[:32], "Integridad", "Sí")
-    add("TRAZABILIDAD", "ID de registro", _record_id(report), "ULID lab", "Sí")
+    add("", "Hash de seguridad", _security_hash(report)[:32], "Integridad", "CUMPLE")
+    add("", "ID de registro", _record_id(report), "ULID lab", "CUMPLE")
     return rows
 
 

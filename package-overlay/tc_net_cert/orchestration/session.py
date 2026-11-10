@@ -205,6 +205,12 @@ class CertificationSession:
 
     def execute(self) -> CertificationReport:
         started_utc, started_local = _stamps()
+        from tc_net_cert.dut.huawei import PORTAL_MODULE_ENV
+        from tc_net_cert.dut.kind import infer_dut_type
+
+        portal_module = os.environ.get(PORTAL_MODULE_ENV, "").strip().lower()
+        if portal_module in {"ont", "emta"}:
+            self.config.dut.type = portal_module
         from tc_net_cert.storage.dut_identity import cached_serial
 
         scope = self._opening_bench_scope()
@@ -1413,6 +1419,10 @@ class CertificationSession:
                 "wifi_password_50": report.bench_duts["A"].wifi_password_50,
             })
 
+        kind = infer_dut_type(report.dut)
+        report.dut.type = kind
+        for bench_id, bench_dut in report.bench_duts.items():
+            bench_dut.type = infer_dut_type(bench_dut) or kind
         if report.dut.serial:
             report.dut_identity_note = ""
             if failures:
@@ -1751,20 +1761,30 @@ def _seed_bench_duts(report: CertificationReport) -> None:
         inv = load_bench_inventory(bench_id)
         if not str(inv.get("serial") or "").strip():
             continue
-        dut = DutIdentity(type=report.dut.type or str(inv.get("family") or "ont"))
-        if inv.get("brand"):
-            dut.brand = str(inv["brand"])
-        if inv.get("model"):
-            dut.model = str(inv["model"])
-        dut.serial = str(inv.get("serial") or "")
-        dut.mac = str(inv.get("mac") or "")
-        if inv.get("software"):
-            dut.firmware = str(inv["software"])
-        if inv.get("hardware"):
-            dut.hardware = str(inv["hardware"])
-        if inv.get("device_type"):
-            dut.device_type = str(inv["device_type"])
-        report.bench_duts[bench_id] = dut
+        from tc_net_cert.dut.kind import infer_dut_type
+
+        seeded = DutIdentity(
+            type=str(inv.get("family") or report.dut.type or "ont"),
+            brand=str(inv.get("brand") or ""),
+            model=str(inv.get("model") or ""),
+            serial=str(inv.get("serial") or ""),
+            mac=str(inv.get("mac") or ""),
+            firmware=str(inv.get("software") or ""),
+            hardware=str(inv.get("hardware") or ""),
+            device_type=str(inv.get("device_type") or ""),
+        )
+        for key in (
+            "docsis_status",
+            "ds_channels",
+            "us_channels",
+            "ds_power",
+            "us_power",
+            "mer",
+        ):
+            if inv.get(key):
+                setattr(seeded, key, str(inv[key]))
+        seeded.type = infer_dut_type(seeded)
+        report.bench_duts[bench_id] = seeded
     if "A" in report.bench_duts and not report.dut.serial:
         report.dut = report.bench_duts["A"].model_copy(deep=True)
 

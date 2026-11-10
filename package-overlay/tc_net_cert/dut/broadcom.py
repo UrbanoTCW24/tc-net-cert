@@ -10,6 +10,8 @@ from __future__ import annotations
 import base64
 import re
 import socket
+from dataclasses import dataclass
+from urllib.parse import urlencode
 
 from tc_net_cert.dut.huawei import _result, allowed_host, valid_password, valid_user
 
@@ -23,6 +25,23 @@ _PAGES = (
     "/wlswitchint0wlsecurity.wl",
 )
 _KAON_MODEL = "CG-2200"
+_CONNECT_PATHS = (
+    "/cmconnectionstatus.html",
+    "/RgConnect.asp",
+    "/RgCableStatus.asp",
+    "/cmcablestatus.html",
+)
+# CG-3000 can take ~15s before the first byte on cmconnectionstatus.html.
+_CONNECT_PAGE_TIMEOUT = 26.0
+# Lab throughput pairs LAN1 with the modem's rear ETH1 on CG-3000.
+_THROUGHPUT_MODEM_PORT = "ETH1"
+_ENERGY_PAGE_TAILS = (
+    "cable_pwrmgt.html",
+    "cable_pwrmgt.wl",
+    "ethportpowersave.wl",
+    "energymanagement.wl",
+)
+_ENERGY_SECTION_PREFIXES = ("", "/section/")
 _LABELS = {
     "hardware": ("versión de hardware", "version de hardware", "version del hardware", "hardware version"),
     "software": ("versión de software", "version de software", "version del software", "software version"),
@@ -70,7 +89,7 @@ def read_basic(
     software = ""
     status = 0
     denied = False
-    for path in ("/RgSwInfo.asp", "/cmswinfo.html", "/"):
+    for path in ("/cmswinfo.html", "/RgSwInfo.asp", "/"):
         status, software = _get(host, path, username, password, source, device, timeout=12)
         if status == 401:
             denied = True
@@ -89,21 +108,44 @@ def read_basic(
         if status == 0:
             return _result(False, error="El portal no respondió por el puerto de prueba. No se intentó el ingreso.")
         return _result(False, error="El portal del EMTA no entregó la página de estado.", model="Kaon")
+    brand = parse_brand(software)
+    early = parse_status(software)
+    commercial = commercial_model(brand, early.get("model") or early.get("hardware", ""))
+    throughput_lan_prepare = ""
     for path in _PAGES[1:]:
+        if path in _CONNECT_PATHS:
+            continue
         status, body = _get(host, path, username, password, source, device, timeout=12)
-        if path in {"/RgConnect.asp", "/cmconnectionstatus.html"}:
-            for _attempt in range(2):
-                if status == 200 and _is_channel_page(body):
-                    break
-                status, body = _get(host, path, username, password, source, device, timeout=12)
-            if not _is_channel_page(body):
-                continue
-        elif status == 200 and "update in progress" in (body or "").lower():
+        if status == 200 and "update in progress" in (body or "").lower():
             status, body = _get(host, path, username, password, source, device, timeout=12)
-        if status == 200 and body.strip() and "update in progress" not in body.lower():
+        if status == 200 and body.strip() and "update in progress" not in body.lower() and not _is_waiting_stub(body):
+            pages[path] = body
+    connect_html = _fetch_connection_html(host, username, password, source, device)
+    if commercial == "CG-3000" or re.search(r"CG-?3000", software or "", flags=re.I):
+        throughput_lan_prepare = _prepare_cg3000_throughput_lan1(
+            host, username, password, source, device
+        )
+    if connect_html:
+        for path in _CONNECT_PATHS:
+            pages.setdefault(path, connect_html)
+    referer = f"http://{host}/main.html"
+    for path in _CONNECT_PATHS:
+        if path in pages:
+            continue
+        status, body = _get(
+            host,
+            path,
+            username,
+            password,
+            source,
+            device,
+            timeout=_CONNECT_PAGE_TIMEOUT if path in _CONNECT_PATHS else 10,
+            referer=referer if path.endswith(".html") else "",
+        )
+        if status == 200 and _is_channel_page(body) and not _is_waiting_stub(body):
             pages[path] = body
     found = parse_status(software)
-    channels = parse_channels(pages.get("/RgConnect.asp", "") or pages.get("/cmconnectionstatus.html", ""))
+    channels = parse_channels(_best_connection_html(pages))
     radios = _band_ssids(host, username, password, source, device) or _switch_ssids(pages) or _ssids(list(pages.values()))
     if not found.get("serial") and not found.get("mac"):
         return _result(
@@ -111,7 +153,6 @@ def read_basic(
             error="El EMTA abrió la sesión, pero la página no mostró el SN ni la MAC.",
             model="Kaon",
         )
-    brand = parse_brand(software)
     if not brand:
         _status, footer = _get(host, "/footer.html", username, password, source, device, timeout=8)
         brand = parse_brand(footer)
@@ -133,7 +174,7 @@ def read_basic(
 
     commercial = commercial_model(brand, found.get("model") or found.get("hardware", ""))
     result["profile"] = canonical_profile_model(commercial) or commercial or _KAON_MODEL
-    connect = pages.get("/RgConnect.asp", "") or pages.get("/cmconnectionstatus.html", "")
+    connect = _best_connection_html(pages)
     link_state = _row_comment(connect, "conectividad")
     result["ds_channels"] = channels["ds_channels"]
     result["ds_power"] = channels["ds_power"]
@@ -147,11 +188,13 @@ def read_basic(
     result["temperature"] = found.get("temperature", "")
     result["uptime"] = found.get("uptime", "")
     result["cm_ip"] = found.get("cm_ip", "")
-    result["docsis_status"] = _docsis(found, link_state)
+    result["docsis_status"] = _docsis(found, link_state, channels)
     _status, mta = _get(host, "/MtaStatus.asp", username, password, source, device, timeout=8)
     result["mta_dhcp"] = _row_comment(mta, "dhcp")
     _status, setup = _get(host, "/RgSetup.asp", username, password, source, device, timeout=8)
     result["wan_dhcp"] = _row_comment(setup, "conexión wan")
+    if throughput_lan_prepare:
+        result["throughput_lan_prepare"] = throughput_lan_prepare
     return result
 
 
@@ -178,6 +221,8 @@ def commercial_model(brand: str, parsed: str) -> str:
         text = ""
     if text:
         return text
+    if re.search(r"CG-?3000", parsed or "", flags=re.I):
+        return "CG-3000"
     if brand == "KAON":
         return _KAON_MODEL
     return ""
@@ -229,7 +274,10 @@ def parse_channels(html: str) -> dict[str, str | list]:
         if header:
             section = header
             continue
-        if not section or not cells or not cells[0].isdigit():
+        if not section or not cells:
+            continue
+        ofdm_row = any("ofdm" in item.lower() for item in cells)
+        if not cells[0].isdigit() and not ofdm_row:
             continue
         locked = _locked(cells)
         if locked is None:
@@ -339,8 +387,17 @@ def _psk(html: str) -> str:
     return value[:64]
 
 
-def _docsis(found: dict[str, str], link_state: str = "") -> str:
+def _docsis(found: dict[str, str], link_state: str = "", channels: dict | None = None) -> str:
     parts = [found.get("docsis") or "", found.get("access") or "", link_state]
+    ch = channels or {}
+    ds = str(ch.get("ds_channels") or "").strip()
+    us = str(ch.get("us_channels") or "").strip()
+    if ds or us:
+        bond = " · ".join(
+            piece for piece in (f"DS {ds}" if ds else "", f"US {us}" if us else "") if piece
+        )
+        if bond:
+            parts.append(bond)
     return " · ".join(part for part in parts if part)
 
 
@@ -357,15 +414,343 @@ def _header_section(cells: list[str]) -> str:
     if not cells or cells[0].isdigit():
         return ""
     joined = " ".join(cells).lower()
+    first = cells[0].lower()
+    if first in ("indice de canales", "índice de canales", "channel index"):
+        return ""
+    if len(cells) >= 4 and ("tipo de canal" in joined or "channel type" in joined):
+        return ""
+    if len(cells) > 2 and "estado" not in joined and not any(
+        token in joined for token in ("downstream", "upstream", "descendente", "ascendente")
+    ):
+        return ""
     if "snr" in joined and "potencia" in joined:
         return "ds"
     if "tipo de canal" in joined or "simbolo" in joined or "símbolo" in joined:
         return "us"
-    if "downstream" in joined or "descendente" in joined:
+    if "downstream" in joined or "descendente" in joined or "bajada" in joined or "bajada cm" in joined:
         return "ds"
-    if "upstream" in joined or "ascendente" in joined:
+    if "upstream" in joined or "ascendente" in joined or "subida" in joined or "subida cm" in joined:
+        return "us"
+    if "canal" in joined and "baj" in joined:
+        return "ds"
+    if "canal" in joined and "sub" in joined:
         return "us"
     return ""
+
+
+def _best_connection_html(pages: dict[str, str]) -> str:
+    for path in _CONNECT_PATHS:
+        body = pages.get(path, "")
+        if body and _is_channel_page(body):
+            return body
+    for body in pages.values():
+        if _is_channel_page(body):
+            return body
+    return pages.get("/RgConnect.asp", "") or pages.get("/cmconnectionstatus.html", "")
+
+
+def _is_waiting_stub(html: str) -> bool:
+    text = html or ""
+    return "Waiting..." in text and "top.location.replace" in text
+
+
+def _fetch_connection_html(host: str, username: str, password: str, source: str, device: str) -> str:
+    """CG-3000 serves channels at cmconnectionstatus.html inside the framed UI (Referer required)."""
+    referer = f"http://{host}/main.html"
+    for attempt in range(2):
+        if attempt:
+            _get(host, "/cmswinfo.html", username, password, source, device, timeout=4)
+        status, body = _get(
+            host,
+            "/cmconnectionstatus.html",
+            username,
+            password,
+            source,
+            device,
+            timeout=_CONNECT_PAGE_TIMEOUT,
+            referer=referer,
+        )
+        if status == 200 and _is_channel_page(body) and not _is_waiting_stub(body):
+            return body
+    status, body = _get(
+        host,
+        "/RgConnect.asp",
+        username,
+        password,
+        source,
+        device,
+        timeout=_CONNECT_PAGE_TIMEOUT,
+        referer=referer,
+    )
+    if status == 200 and _is_channel_page(body) and not _is_waiting_stub(body):
+        return body
+    for probe in ("/RgConnect.asp?",):
+        status, body = _get(
+            host,
+            probe,
+            username,
+            password,
+            source,
+            device,
+            timeout=5,
+            extra_headers={"X-Requested-With": "XMLHttpRequest", "Accept": "*/*"},
+        )
+        if status != 200 or not body:
+            continue
+        cleaned = body.strip()
+        if _is_channel_page(cleaned):
+            return cleaned
+        if cleaned and not cleaned.lstrip().startswith("<") and len(cleaned) < 200:
+            cookie = f"credential={cleaned.splitlines()[0].strip()}"
+            status, body = _get(
+                host,
+                "/RgConnect.asp",
+                username,
+                password,
+                source,
+                device,
+                timeout=8,
+                referer=referer,
+                cookie=cookie,
+            )
+            if status == 200 and _is_channel_page(body) and not _is_waiting_stub(body):
+                return body
+    return ""
+
+
+@dataclass(frozen=True)
+class _PortToggle:
+    label: str
+    name: str
+    enabled: bool
+    value: str
+
+
+def _prepare_cg3000_throughput_lan1(
+    host: str,
+    username: str,
+    password: str,
+    source: str,
+    device: str,
+) -> str:
+    """Ensure modem ETH1 is enabled; lab throughput LAN1 is cabled to that port."""
+    path, html = _fetch_energy_page(host, username, password, source, device)
+    if not path or not html:
+        return "No se encontró Administración de energía; revisa ETH1 manualmente."
+    toggles, action, hidden, submit = _parse_energy_form(html)
+    if not toggles:
+        return "La página de energía no mostró puertos ETH; revisa ETH1 manualmente."
+    eth1 = _find_port_toggle(toggles, _THROUGHPUT_MODEM_PORT)
+    if not eth1:
+        return "No se identificó ETH1 en energía; revisa LAN1 del throughput manualmente."
+    if eth1.enabled:
+        return f"{_THROUGHPUT_MODEM_PORT} ya estaba activo para LAN1 del throughput."
+    body = _energy_apply_body(toggles, force_enabled={_THROUGHPUT_MODEM_PORT}, hidden=hidden, submit=submit)
+    if not body:
+        return "No se pudo armar el formulario de energía; activa ETH1 en el portal."
+    post_path = action or path
+    referer = f"http://{host}{path}"
+    status, response = _post(host, post_path, username, password, source, device, body, referer=referer)
+    if status not in {200, 204, 302}:
+        return f"No se pudo aplicar energía (HTTP {status}); activa {_THROUGHPUT_MODEM_PORT} manualmente."
+    _status, verify_html = _get(host, path, username, password, source, device, timeout=12, referer=referer)
+    verify, _, _, _ = _parse_energy_form(verify_html or response)
+    eth1_after = _find_port_toggle(verify, _THROUGHPUT_MODEM_PORT) if verify else None
+    if eth1_after and eth1_after.enabled:
+        return f"{_THROUGHPUT_MODEM_PORT} activado para LAN1 del throughput (Aplicar/Guardar)."
+    if _eth1_marked_enabled(response or verify_html):
+        return f"{_THROUGHPUT_MODEM_PORT} activado para LAN1 del throughput."
+    return f"Se envió Aplicar/Guardar; confirma que {_THROUGHPUT_MODEM_PORT} quedó marcado en energía."
+
+
+def _fetch_energy_page(
+    host: str,
+    username: str,
+    password: str,
+    source: str,
+    device: str,
+) -> tuple[str, str]:
+    referer = f"http://{host}/main.html"
+    for prefix in _ENERGY_SECTION_PREFIXES:
+        for tail in _ENERGY_PAGE_TAILS:
+            path = f"{prefix}{tail}" if prefix else f"/{tail}"
+            if not path.startswith("/"):
+                path = "/" + path
+            status, body = _get(host, path, username, password, source, device, timeout=6, referer=referer)
+            if status == 200 and _is_energy_page(body):
+                return path, body
+    return "", ""
+
+
+def _is_energy_page(html: str) -> bool:
+    text = (html or "").lower()
+    if _THROUGHPUT_MODEM_PORT.lower() not in text:
+        return False
+    if any(hint in text for hint in ("administracion de energia", "administração de energia", "energy management")):
+        return True
+    if "deshabilitar puertos" in text or "disable ports" in text:
+        return True
+    return "eth2" in text and ("wifi" in text or "wi-fi" in text) and "aplicar" in text
+
+
+def _parse_energy_form(html: str) -> tuple[list[_PortToggle], str, dict[str, str], tuple[str, str] | None]:
+    forms = re.findall(r"<form\b([\s\S]*?)</form>", html or "", flags=re.I)
+    blocks = forms or [html or ""]
+    for block in blocks:
+        action = ""
+        match = re.search(r'action\s*=\s*"([^"]*)"', block, flags=re.I)
+        if match:
+            action = match.group(1).strip()
+        hidden: dict[str, str] = {}
+        toggles: list[_PortToggle] = []
+        for tag in re.findall(r"<input\b[^>]*>", block, flags=re.I):
+            attrs = dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', tag, flags=re.I))
+            name = (attrs.get("name") or "").strip()
+            if not name:
+                continue
+            kind = (attrs.get("type") or "text").lower()
+            value = (attrs.get("value") or "on").strip()
+            if kind == "hidden":
+                hidden[name] = value
+                continue
+            if kind != "checkbox":
+                continue
+            label = _checkbox_label(block, tag)
+            if not label:
+                label = name
+            checked = bool(re.search(r"\bchecked\b", tag, flags=re.I))
+            toggles.append(_PortToggle(label=label, name=name, enabled=checked, value=value))
+        if toggles:
+            submit = _parse_submit_button(block)
+            return toggles, action, hidden, submit
+    toggles = _parse_energy_checkboxes_loose(html)
+    if toggles:
+        return toggles, "", {}, _parse_submit_button(html or "")
+    return [], "", {}, None
+
+
+def _parse_energy_checkboxes_loose(html: str) -> list[_PortToggle]:
+    toggles: list[_PortToggle] = []
+    for tag in re.findall(r"<input\b[^>]*type\s*=\s*[\"']?checkbox[\"']?[^>]*>", html or "", flags=re.I):
+        attrs = dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', tag, flags=re.I))
+        name = (attrs.get("name") or attrs.get("id") or "").strip()
+        if not name:
+            continue
+        label = _checkbox_label(html, tag)
+        if not label and not re.search(r"eth|wifi", name, flags=re.I):
+            continue
+        checked = bool(re.search(r"\bchecked\b", tag, flags=re.I))
+        value = (attrs.get("value") or "on").strip()
+        toggles.append(_PortToggle(label=label or name, name=name, enabled=checked, value=value))
+    return toggles
+
+
+def _checkbox_label(html: str, tag: str) -> str:
+    match = re.search(r'\bid\s*=\s*"([^"]+)"', tag, flags=re.I)
+    if match:
+        ident = match.group(1)
+        for pattern in (
+            rf'<label[^>]*\sfor\s*=\s*"{re.escape(ident)}"[^>]*>(.*?)</label>',
+            rf"<label[^>]*>(.*?)</label>\s*{re.escape(tag)}",
+            rf"{re.escape(tag)}\s*<label[^>]*>(.*?)</label>",
+        ):
+            hit = re.search(pattern, html or "", flags=re.I | re.S)
+            if hit:
+                return _cell_text(hit.group(1)).strip()[:24]
+    neighbor = re.search(re.escape(tag) + r"[^<]{0,80}", html or "", flags=re.I)
+    if neighbor and re.search(r"eth|wifi", neighbor.group(0), flags=re.I):
+        text = re.sub(r"<[^>]+>", " ", neighbor.group(0))
+        token = re.search(r"(?:ETH\d|WiFi\s*[\d.]+\s*G)", text, flags=re.I)
+        if token:
+            return token.group(0).upper().replace(" ", " ")
+    for row in re.findall(r"<tr\b[\s\S]*?</tr>", html or "", flags=re.I):
+        if tag in row:
+            text = _cell_text(row)
+            token = re.search(r"(?:ETH\d|WiFi\s*[\d.]+\s*G)", text, flags=re.I)
+            if token:
+                return token.group(0).upper().replace(" ", " ")
+    return ""
+
+
+def _parse_submit_button(block: str) -> tuple[str, str] | None:
+    for tag in re.findall(r"<input\b[^>]*>", block or "", flags=re.I):
+        if not re.search(r'\btype\s*=\s*"(?:submit|button)"', tag, flags=re.I):
+            continue
+        attrs = dict(re.findall(r'(\w+)\s*=\s*"([^"]*)"', tag, flags=re.I))
+        name = (attrs.get("name") or "apply").strip()
+        value = (attrs.get("value") or "Apply").strip()
+        if re.search(r"aplicar|guardar|apply|save", value, flags=re.I) or re.search(
+            r"aplicar|guardar|apply|save", tag, flags=re.I
+        ):
+            return name, value
+    match = re.search(
+        r"<button\b[^>]*>([^<]*(?:aplicar|guardar|apply|save)[^<]*)</button>",
+        block or "",
+        flags=re.I,
+    )
+    if match:
+        return "apply", _cell_text(match.group(1)).strip() or "Apply"
+    return ("apply", "Apply")
+
+
+def _find_port_toggle(toggles: list[_PortToggle], label: str) -> _PortToggle | None:
+    needle = re.sub(r"\s+", "", label.lower())
+    for item in toggles:
+        folded = re.sub(r"\s+", "", item.label.lower())
+        if folded == needle or folded.endswith(needle) or needle in folded:
+            return item
+    return None
+
+
+def _energy_apply_body(
+    toggles: list[_PortToggle],
+    *,
+    force_enabled: set[str],
+    hidden: dict[str, str],
+    submit: tuple[str, str] | None,
+) -> bytes:
+    fields: dict[str, str] = dict(hidden)
+    for item in toggles:
+        label = re.sub(r"\s+", "", item.label.upper())
+        must_enable = any(re.sub(r"\s+", "", token.upper()) in label for token in force_enabled)
+        keep_enabled = item.enabled or must_enable
+        if keep_enabled:
+            fields[item.name] = item.value or "on"
+    if submit:
+        fields[submit[0]] = submit[1]
+    if len(fields) <= len(hidden):
+        return b""
+    return urlencode(fields).encode("ascii")
+
+
+def _eth1_marked_enabled(html: str) -> bool:
+    toggles, _, _, _ = _parse_energy_form(html or "")
+    eth1 = _find_port_toggle(toggles, _THROUGHPUT_MODEM_PORT)
+    return bool(eth1 and eth1.enabled)
+
+
+def _connection_paths_from_menu(
+    host: str,
+    username: str,
+    password: str,
+    source: str,
+    device: str,
+) -> list[str]:
+    hints = ("connect", "connection", "cable", "channel", "modem", "rf")
+    paths: list[str] = []
+    for page in ("/main.html", "/index.html", "/RgSwInfo.asp", "/cmswinfo.html"):
+        status, body = _get(host, page, username, password, source, device, timeout=10, referer=f"http://{host}/")
+        if status != 200 or not body or _is_waiting_stub(body):
+            continue
+        for token in re.findall(r'(?:href|src)\s*=\s*"([^"]+)"', body, flags=re.I):
+            folded = token.lower()
+            if not any(hint in folded for hint in hints):
+                continue
+            path = token.split("?", 1)[0].strip()
+            if not path.startswith("/"):
+                continue
+            paths.append(path)
+    return paths
 
 
 def _channel_row(section: str, cells: list[str]) -> dict[str, str]:
@@ -549,28 +934,81 @@ def _get(
     device: str,
     timeout: float = 6,
     referer: str = "",
+    cookie: str = "",
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[int, str]:
     token = base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
     status, headers, body = _exchange(
-        host, path, token, source, device, timeout=timeout, referer=referer
+        host,
+        path,
+        token,
+        source,
+        device,
+        timeout=timeout,
+        referer=referer,
+        cookie=cookie,
+        extra_headers=extra_headers,
+        method="GET",
     )
     location = headers.get("location", "")
     target = location.split("?", 1)[0]
+    redirect_kwargs = {
+        "timeout": timeout,
+        "referer": referer,
+        "cookie": cookie,
+        "extra_headers": extra_headers,
+    }
     if status in {301, 302, 303} and target in {"/", "/index.html"}:
-        status, _headers, body = _exchange(
-            host, path, token, source, device, timeout=timeout, referer=referer
-        )
+        status, _headers, body = _exchange(host, path, token, source, device, **redirect_kwargs)
     elif status in {301, 302, 303} and target.startswith("/") and target != path:
-        status, _headers, body = _exchange(
-            host, target, token, source, device, timeout=timeout, referer=referer
-        )
+        status, _headers, body = _exchange(host, target, token, source, device, **redirect_kwargs)
+    return status, body
+
+
+def _post(
+    host: str,
+    path: str,
+    username: str,
+    password: str,
+    source: str,
+    device: str,
+    data: bytes,
+    timeout: float = 12,
+    referer: str = "",
+    cookie: str = "",
+    extra_headers: dict[str, str] | None = None,
+) -> tuple[int, str]:
+    token = base64.b64encode(f"{username}:{password}".encode()).decode("ascii")
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    merged = {**(extra_headers or {}), **headers}
+    status, _headers, body = _exchange(
+        host,
+        path,
+        token,
+        source,
+        device,
+        timeout=timeout,
+        referer=referer,
+        cookie=cookie,
+        extra_headers=merged,
+        method="POST",
+        body=data,
+    )
     return status, body
 
 
 def _is_channel_page(html: str) -> bool:
     """The connection table. A redirect to the status home is not this page."""
+    if _is_waiting_stub(html):
+        return False
     text = (html or "").lower()
-    return "dbmv" in text or ("potencia" in text and "snr" in text)
+    if "dbmv" in text or "dpmv" in text:
+        return True
+    if "potencia" in text and ("snr" in text or "mer" in text):
+        return True
+    if "downstream" in text and "upstream" in text and ("canal" in text or "channel" in text):
+        return True
+    return False
 
 
 def _exchange(
@@ -581,9 +1019,14 @@ def _exchange(
     device: str,
     timeout: float = 6,
     referer: str = "",
+    cookie: str = "",
+    extra_headers: dict[str, str] | None = None,
+    method: str = "GET",
+    body: bytes = b"",
 ) -> tuple[int, dict[str, str], str]:
     if not path.startswith("/"):
         path = "/" + path
+    verb = (method or "GET").upper()
     data = b""
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
@@ -593,12 +1036,21 @@ def _exchange(
         if source:
             sock.bind((source, 0))
         sock.connect((host, 80))
-        header = f"GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n"
+        header = f"{verb} {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n"
         if token:
             header += f"Authorization: Basic {token}\r\n"
         if referer:
             header += f"Referer: {referer}\r\n"
+        if cookie:
+            header += f"Cookie: {cookie}\r\n"
+        for name, value in (extra_headers or {}).items():
+            if name and value:
+                header += f"{name}: {value}\r\n"
+        if verb == "POST" and body:
+            header += f"Content-Length: {len(body)}\r\n"
         sock.sendall((header + "\r\n").encode("ascii"))
+        if verb == "POST" and body:
+            sock.sendall(body)
         while len(data) < 400_000:
             try:
                 chunk = sock.recv(65536)

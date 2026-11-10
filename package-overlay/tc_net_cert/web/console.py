@@ -22,6 +22,7 @@ from tc_net_cert.dut.huawei import (
     MAC_ENV,
     MODEL_ENV,
     PASSWORD_ENV,
+    PORTAL_MODULE_ENV,
     PORTALS_ENV,
     SERIAL_ENV,
     USER_ENV,
@@ -198,6 +199,7 @@ class Console:
         identity: dict[str, str] | None = None,
         bench_id: str = "",
         bench_credentials: dict | None = None,
+        portal_module: str = "",
     ) -> dict:
         if stage not in STAGES:
             raise ValueError("Prueba no reconocida")
@@ -252,6 +254,9 @@ class Console:
                     for key, value in stored_env(wifi_file).items():
                         env.setdefault(key, value)
             env[PORTALS_ENV] = str(portals_path())
+            module = (portal_module or "").strip().lower()
+            if module in {"ont", "emta"}:
+                env[PORTAL_MODULE_ENV] = module
             env[SUPABASE_ENV] = str(config_path())
             dual_lab = isinstance(bench_credentials, dict) and bool(bench_credentials)
             if dual_lab:
