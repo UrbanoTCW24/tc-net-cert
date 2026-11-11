@@ -9,8 +9,38 @@ from tc_net_cert.config.loader import load_config, runs_directory
 from tc_net_cert.core.models import AppConfig
 from tc_net_cert.dut.huawei import allowed_host, discover_portal, dut_paths, portal_retryable, read_portal, valid_password, valid_user
 from tc_net_cert.dut.portals import load_portals, portals_path
+from tc_net_cert.network.management import cable_on_lab_plane, iface_mac, management_blocked_macs
 from tc_net_cert.storage.bench_identity import store_bench
 from tc_net_cert.storage.runs import order_for_serial
+
+
+def _leftover_lab_namespaces() -> list[str]:
+    netns = Path("/var/run/netns")
+    if not netns.is_dir():
+        return []
+    return sorted(entry.name for entry in netns.iterdir() if entry.name.startswith("ns-lan"))
+
+
+def _configured_bench_macs(config: AppConfig) -> set[str]:
+    blocked = management_blocked_macs(config)
+    macs: set[str] = set()
+    for bench_id in resolve_benches(config):
+        for mac in bench_ports(config, bench_id).values():
+            if mac and mac.lower() not in blocked:
+                macs.add(mac.lower())
+    return macs
+
+
+def ensure_bench_nics_in_root(config: AppConfig, executor) -> list[str]:
+    """After a cert run, lab NICs can remain inside ns-lan*; discover needs them in root."""
+    macs = _configured_bench_macs(config)
+    if not macs or _linked_nics(macs):
+        return []
+    if not _leftover_lab_namespaces():
+        return []
+    from tc_net_cert.orchestration.recover import recover
+
+    return recover(executor, force_prefixes=True)
 
 
 def _dut_kind_from_reading(found: dict) -> str:
@@ -21,9 +51,37 @@ def _dut_kind_from_reading(found: dict) -> str:
     brand = str(found.get("brand") or "").upper()
     if model in {"CGNV5", "CGNV5CLR"} or brand in {"HISTRON", "HITRON", "KAON"}:
         return "emta"
+    if model.startswith("CG") or "CGNV" in model.replace("-", ""):
+        return "emta"
     if model.startswith("HG") or brand == "HUAWEI":
         return "ont"
     return ""
+
+
+def _expected_family(form_model: str) -> str:
+    token = (form_model or "").strip().upper().replace(" ", "")
+    if not token:
+        return ""
+    if token.startswith("HG") or token.startswith("HN"):
+        return "ont"
+    if token.startswith("CG") or "CGNV" in token.replace("-", "") or token in {"KAON", "HITRON", "HISTRON"}:
+        return "emta"
+    return ""
+
+
+def _cross_family_mismatch(form_model: str, found: dict) -> str:
+    expected = _expected_family(form_model)
+    if not expected:
+        return ""
+    kind = _dut_kind_from_reading(found)
+    if not kind or kind == expected:
+        return ""
+    label = str(found.get("model") or found.get("brand") or kind).strip() or kind
+    return (
+        f"El portal devolvió {label} ({kind.upper()}), pero el perfil del banco indica "
+        f"{form_model} ({expected.upper()}). Usa la LAN del banco (Remapear LAN · Buscar), "
+        "no la ruta de gestión de la PC."
+    )
 
 
 def portal_cables_for_macs(macs: set[str], portal_host: str = "") -> list[dict[str, str]]:
@@ -126,7 +184,10 @@ def _misplaced_ont_hint(macs: set[str]) -> str:
     if not linked_elsewhere:
         return ""
     names = ", ".join(linked_elsewhere[:3])
-    return f" Hay enlace en {names} (no pertenece a este banco); el ONT debe ir a LAN5–LAN8."
+    return (
+        f" Hay enlace en {names} (no es LAN del banco); "
+        "conecta el módem solo a los puertos LAN1–LAN8 del banco."
+    )
 
 
 def _row_has_link(row: dict[str, str]) -> bool:
@@ -226,6 +287,38 @@ def _sort_bench_cables(cables: list[dict[str, str]]) -> list[dict[str, str]]:
     return sorted(cables, key=weight)
 
 
+def _bench_static_portal_paths(macs: set[str], portal_host: str) -> list[dict[str, str]]:
+    """CG/EMTA at 192.168.1.1 without DHCP: scrape bound to the bench NIC."""
+    host = portal_host.strip()
+    if not allowed_host(host):
+        return []
+    paths: list[dict[str, str]] = []
+    for row in _linked_nics(macs):
+        iface = str(row.get("iface") or "")
+        if not iface:
+            continue
+        source = str(row.get("source") or "").strip()
+        carrier = str(row.get("carrier") or "").strip() == "1"
+        oper = str(row.get("operstate") or "").lower()
+        up = oper in {"up", "unknown"} or carrier or _ethtool_linked(iface) or source
+        if not up:
+            continue
+        paths.append({"iface": iface, "source": source, "gateway": host})
+    if paths:
+        return paths
+    for row in _linked_nics(macs):
+        iface = str(row.get("iface") or "")
+        if iface:
+            paths.append(
+                {
+                    "iface": iface,
+                    "source": str(row.get("source") or "").strip(),
+                    "gateway": host,
+                }
+            )
+    return paths
+
+
 def resolve_bench_cables(macs: set[str], portal_host: str) -> tuple[list[dict[str, str]], str]:
     """DHCP paths first; then portal IP manual on linked NICs; then inferred gateway for scrape."""
     cables = portal_cables_for_macs(macs, portal_host)
@@ -236,7 +329,7 @@ def resolve_bench_cables(macs: set[str], portal_host: str) -> tuple[list[dict[st
     if not linked:
         return (
             [],
-            "Ninguna NIC de este banco tiene enlace físico. Conecta el cable al ONT y pulsa Reconfigurar LAN.",
+            "No hay adaptador de certificación mapeado en este banco. Pulsa Remapear LAN y vuelve a Buscar.",
         )
     if allowed_host(host):
         out = []
@@ -251,11 +344,14 @@ def resolve_bench_cables(macs: set[str], portal_host: str) -> tuple[list[dict[st
     names = ", ".join(row["iface"] for row in live) or "—"
     if not live:
         names = ", ".join(row["iface"] for row in linked) or "—"
+        static = _bench_static_portal_paths(macs, host)
+        if static:
+            return static, ""
         extra = _misplaced_ont_hint(macs)
         return (
             [],
-            "Ninguna LAN de este banco tiene enlace en " + names + ". "
-            "Conecta el ONT a LAN5–LAN8 (banco B), pulsa Reconfigurar LAN B y Buscar otra vez." + extra,
+            "Sin carrier en " + names + ". Cable del módem a LAN del banco, Remapear LAN y Buscar."
+            + extra,
         )
     with_ip = [row for row in live if row.get("source")]
     scrape_paths: list[dict[str, str]] = []
@@ -272,16 +368,19 @@ def resolve_bench_cables(macs: set[str], portal_host: str) -> tuple[list[dict[st
         )
     if scrape_paths:
         return scrape_paths, ""
+    static = _bench_static_portal_paths(macs, host)
+    if static:
+        return static, ""
     if not with_ip:
         return (
             [],
-            "Hay enlace (" + names + ") pero el ONT aún no entregó DHCP. "
-            "Pulsa Reconfigurar LAN del banco, espera 10 s e indica Portal IP (ej. 192.168.1.1).",
+            "Hay enlace (" + names + ") pero el módem aún no entregó DHCP. "
+            "Indica Portal IP 192.168.1.1 en la tarjeta y pulsa Buscar, o Remapear LAN del banco.",
         )
     return (
         [],
-        "Ningún puerto de este banco tiene puerta de enlace DHCP. "
-        "Reconfigura LAN del banco o escribe Portal IP en la tarjeta y vuelve a buscar.",
+        "Ningún puerto de este banco tiene enlace útil ni DHCP. "
+        "Conecta el CG por Ethernet a LAN del banco, Remapear LAN y Buscar de nuevo.",
     )
 
 
@@ -294,6 +393,10 @@ def _run_order_hint(config: AppConfig, serial: str) -> tuple[str, bool]:
     return "", False
 
 
+def _filter_bench_cables(config: AppConfig, cables: list[dict[str, str]], bench_macs: set[str]) -> list[dict[str, str]]:
+    return [row for row in cables if cable_on_lab_plane(config, row, bench_macs=bench_macs)]
+
+
 def discover_one_bench(
     config: AppConfig,
     bench_id: str,
@@ -304,7 +407,12 @@ def discover_one_bench(
     form_model: str,
     portals: dict,
 ) -> dict:
-    macs = set(bench_ports(config, bench_id).values())
+    blocked = management_blocked_macs(config)
+    macs = {
+        mac.lower()
+        for mac in bench_ports(config, bench_id).values()
+        if mac and mac.lower() not in blocked
+    }
     if not macs:
         hint = (
             "Conecta 4 adaptadores Ethernet más y pulsa Remapear LAN."
@@ -316,15 +424,37 @@ def discover_one_bench(
             "ok": False,
             "error": f"Banco {bench_id}: sin adaptador de PC en este banco. {hint}",
         }
-    cables, cable_error = resolve_bench_cables(macs, portal_host)
-    cables = _sort_bench_cables(cables)
-    via_route = False
-    if not cables and allowed_host(portal_host):
-        route = _route_cable_to_portal(portal_host)
-        if route:
-            cables = [route]
-            via_route = True
-            cable_error = ""
+    if not _linked_nics(macs):
+        leftovers = _leftover_lab_namespaces()
+        if leftovers:
+            names = ", ".join(leftovers[:6])
+            return {
+                "bench_id": bench_id.upper(),
+                "ok": False,
+                "error": (
+                    f"Banco {bench_id}: las NIC del laboratorio no están en el host (namespaces {names}). "
+                    "Pulsa Recuperar namespaces, espera 5 s y vuelve a Buscar."
+                ),
+            }
+    host = portal_host.strip() or "192.168.1.1"
+    cables, cable_error = resolve_bench_cables(macs, host)
+    cables = _filter_bench_cables(config, _sort_bench_cables(cables), macs)
+    if not cables and allowed_host(host):
+        cables = _filter_bench_cables(config, _bench_static_portal_paths(macs, host), macs)
+    if not cables:
+        route = _route_cable_to_portal(host)
+        route_mac = iface_mac(str(route.get("iface") or "")) if route else ""
+        if route and route_mac and route_mac in blocked:
+            return {
+                "bench_id": bench_id.upper(),
+                "ok": False,
+                "error": (
+                    f"Solo la NIC de administración ({route['iface']}) alcanza {host}. "
+                    "No se usa para el scraper. Cable del CG a LAN del banco "
+                    + ("LAN1–LAN4" if bench_id.upper() == "A" else "LAN5–LAN8")
+                    + ", enlace activo, Remapear LAN y Buscar."
+                ),
+            }
     if not cables:
         return {
             "bench_id": bench_id.upper(),
@@ -360,21 +490,36 @@ def discover_one_bench(
                 break
     found["bench_id"] = bench_id.upper()
     if found.get("ok"):
-        found["error"] = ""
-        if via_route:
-            iface = str(found.get("iface") or cables[0].get("iface") or "")
-            found["warning"] = (
-                f"Inventario por {iface} (ruta al portal), no por cable en LAN del banco. "
-                "Para certificar, conecta el ONT a una LAN de este banco."
-            )
         kind = _dut_kind_from_reading(found)
         if kind:
             found["family"] = kind
-        serial = str(found.get("serial") or "")
-        run_id, reused = _run_order_hint(config, serial)
-        found["run_id_hint"] = run_id
-        found["run_reused"] = reused
-        store_bench(bench_id, found)
+        mismatch = _cross_family_mismatch(form_model, found)
+        if mismatch:
+            found["ok"] = False
+            found["error"] = mismatch
+        else:
+            found["error"] = ""
+        iface = str(found.get("iface") or cables[0].get("iface") or "")
+        macs_set = {mac.lower() for mac in macs if mac}
+        route_mac = iface_mac(str(cables[0].get("iface") or ""))
+        if found.get("ok") and route_mac and route_mac in management_blocked_macs(config):
+            found["ok"] = False
+            found["error"] = (
+                f"El portal se leyó por {iface} (administración/Internet). "
+                "Esa NIC no pertenece al banco de certificación."
+            )
+        if found.get("ok") and route_mac and route_mac not in macs_set:
+            found["ok"] = False
+            found["error"] = (
+                f"El portal respondió por {iface}, que no pertenece a este banco. "
+                "Conecta el módem a una LAN del banco (no al uplink de gestión) y pulsa Buscar."
+            )
+        if found.get("ok"):
+            serial = str(found.get("serial") or "")
+            run_id, reused = _run_order_hint(config, serial)
+            found["run_id_hint"] = run_id
+            found["run_reused"] = reused
+            store_bench(bench_id, found)
     return found
 
 
@@ -413,17 +558,22 @@ def discover_benches(
     from tc_net_cert.core.executor import SystemExecutor
     from tc_net_cert.network.management import refresh_portal_links
 
+    executor = SystemExecutor()
+    recovery_notes = ensure_bench_nics_in_root(config, executor)
     portals = load_portals(portals_path())
     benches = resolve_benches(config)
     ids = list(benches.keys())
     if scope.upper() in benches:
         ids = [scope.upper()]
+    blocked = management_blocked_macs(config)
     refresh_map: dict[str, str] = {}
     for bench_id in ids:
-        refresh_map.update(bench_ports(config, bench_id))
+        for name, mac in bench_ports(config, bench_id).items():
+            if mac and mac.lower() not in blocked:
+                refresh_map[name] = mac
     if refresh_map:
         try:
-            refresh_portal_links(SystemExecutor(), refresh_map)
+            refresh_portal_links(executor, refresh_map)
         except Exception:
             pass
     results = []
@@ -448,8 +598,11 @@ def discover_benches(
             )
         )
     ok = any(item.get("ok") for item in results)
-    return {
+    payload: dict = {
         "ok": ok,
         "benches": results,
         "management_note": "La LAN nativa (Internet/sync BD) no se usa para leer el portal.",
     }
+    if recovery_notes:
+        payload["recovery"] = recovery_notes
+    return payload

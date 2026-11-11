@@ -112,9 +112,6 @@ def serve(
     global _PANEL_BOOT
     if host not in {"127.0.0.1", "localhost", "::1"}:
         raise RuntimeError("Refusing to bind a non-loopback address. The dashboard is local only.")
-    from tc_net_cert.storage.bench_identity import clear_all_bench_readings
-
-    clear_all_bench_readings()
     _PANEL_BOOT = secrets.token_urlsafe(12)
     root = _runs_root(config)
     state = Path.home() / ".local" / "state" / "tc-net-cert"
@@ -141,9 +138,20 @@ def serve(
         server.shutdown()
 
 
-def _portal_targets(ports: dict[str, str], portal_host: str = "") -> list[dict[str, str]]:
+def _portal_targets(
+    ports: dict[str, str],
+    portal_host: str = "",
+    *,
+    config: AppConfig | None = None,
+) -> list[dict[str, str]]:
     """Test NIC routes to the modem. Optional portal_host is tried first on the same NIC."""
-    cables = [item for item in dut_paths(set(ports.values())) if allowed_host(item.get("gateway", ""))][:2]
+    blocked: set[str] = set()
+    if config is not None:
+        from tc_net_cert.network.management import management_blocked_macs
+
+        blocked = management_blocked_macs(config)
+    wanted = {str(mac).strip().lower() for mac in ports.values() if mac and str(mac).strip().lower() not in blocked}
+    cables = [item for item in dut_paths(wanted) if allowed_host(item.get("gateway", ""))][:2]
     if not cables:
         return []
     host = portal_host.strip()
@@ -164,6 +172,34 @@ def _portal_targets(ports: dict[str, str], portal_host: str = "") -> list[dict[s
             targets.append(dict(cable))
             seen.add(key)
     return targets
+
+
+def _sidebar_device_from_benches() -> tuple[str, str]:
+    """Bench LAN inventory only — never the admin/management ONT on config.dut."""
+    inv = load_all_inventories()
+
+    def _kind(row: dict) -> str:
+        family = str(row.get("family") or "").strip().lower()
+        if family in {"ont", "emta"}:
+            return family
+        model = str(row.get("model") or "").upper()
+        if model.startswith("CG") or "CGNV" in model.replace("-", ""):
+            return "emta"
+        if model.startswith("HG") or model.startswith("HN"):
+            return "ont"
+        return ""
+
+    for bench_id in ("A", "B"):
+        row = inv.get(bench_id) or {}
+        model = str(row.get("model") or "").strip()
+        serial = str(row.get("serial") or "").strip()
+        if not model and not serial:
+            continue
+        brand = str(row.get("brand") or "").strip()
+        label = " ".join(part for part in (brand, model) if part) or model or serial
+        kind = _kind(row)
+        return label, kind.upper() if kind else "BANCO " + bench_id
+    return "Sin equipo en bancos", "LAB"
 
 
 def _dut_kind_from_reading(found: dict) -> str:
@@ -595,7 +631,7 @@ def _handler(
                 refresh_portal_links(SystemExecutor(), dict(ports))
                 time.sleep(1.5)
                 portal_host = str(body.get("portal_host") or "").strip()
-                cables = _portal_targets(ports, portal_host)
+                cables = _portal_targets(ports, portal_host, config=config)
                 if not cables:
                     self._json(409, {"ok": False, "error": "Ningún puerto de prueba tiene puerta de enlace DHCP. Conecta el módem por Ethernet (LAN con link). El Wi-Fi no se usa."})
                     return
@@ -672,7 +708,7 @@ def _handler(
                 if not dut_password and saved:
                     dut_password = saved["password"]
                 portal_host = str(body.get("portal_host") or "").strip()
-                cables = _portal_targets(ports, portal_host or host)
+                cables = _portal_targets(ports, portal_host or host, config=config)
                 if not cables:
                     self._json(409, {"ok": False, "error": "Ningún puerto de prueba tiene puerta de enlace DHCP. El Wi-Fi no se usa."})
                     return
@@ -928,6 +964,21 @@ def _handler(
             bench_credentials = body.get("bench_credentials")
             if not isinstance(bench_credentials, dict):
                 bench_credentials = None
+            if console.status().get("running"):
+                self._json(409, {"ok": False, "error": "Hay una prueba en curso.", **_status_payload(root, console, monitor, ports)})
+                return
+            from tc_net_cert.core.executor import SystemExecutor
+            from tc_net_cert.namespaces.manager import NamespaceManager
+            from tc_net_cert.orchestration.recover import recover
+
+            executor = SystemExecutor()
+            stale = [
+                name
+                for name in NamespaceManager(executor).list_namespaces()
+                if name.startswith("ns-lan") or name.startswith("ns-tcnc-")
+            ]
+            if stale:
+                recover(executor, force_prefixes=True)
             try:
                 console.start(
                     stage,
@@ -991,9 +1042,14 @@ def _handler(
                 shown_model = "CG-2200"
             elif config.dut.type == "emta" and shown_model in {"", "Kaon", "KAON", "CGNV5"} and not hitron_model:
                 shown_model = "CG-2200"
+            if str(config.dut.model or "").upper().startswith("HG") and "CG-3000" in portals:
+                shown_model = "CG-3000"
+            elif str(config.dut.model or "").upper().startswith("HG") and "CG-2200" in portals:
+                shown_model = "CG-2200"
             display_dut = config.dut.model or "—"
             if stale_hitron:
                 display_dut = "CG-2200"
+            sidebar_name, sidebar_kind = _sidebar_device_from_benches()
             active = portals.get(active_name) or {"host": "192.168.1.1", "username": "", "password": ""}
             body = environment.get_template("dashboard.html").render(
                 token=token,
@@ -1004,6 +1060,8 @@ def _handler(
                 profile=config.active_profile,
                 dut_type=config.dut.type,
                 dut_model=display_dut,
+                sidebar_device_name=sidebar_name,
+                sidebar_device_kind=sidebar_kind,
                 portal_model=shown_model,
                 portal_host=active["host"],
                 portal_user=active["username"],

@@ -35,12 +35,17 @@ _CONNECT_PATHS = (
 _CONNECT_PAGE_TIMEOUT = 26.0
 # Lab throughput pairs LAN1 with the modem's rear ETH1 on CG-3000.
 _THROUGHPUT_MODEM_PORT = "ETH1"
+# CG-3000 cable_pwrmgt.cgi: getPortName maps eth3 → label ETH1 (see util.js on the modem).
+_CG3000_ETH1_PHY_TOKEN = "eth3"
+_ENERGY_CGI_PATH = "/cable_pwrmgt.cgi"
 _ENERGY_PAGE_TAILS = (
+    "cable_pwrmgt.cgi",
     "cable_pwrmgt.html",
     "cable_pwrmgt.wl",
     "ethportpowersave.wl",
     "energymanagement.wl",
 )
+_ENERGY_APPLY_HINTS = ("aplicar/guardar", "aplicar", "guardar", "apply", "save")
 _ENERGY_SECTION_PREFIXES = ("", "/section/")
 _LABELS = {
     "hardware": ("versión de hardware", "version de hardware", "version del hardware", "hardware version"),
@@ -526,6 +531,17 @@ class _PortToggle:
     value: str
 
 
+def prepare_cg3000_throughput_lan(
+    host: str,
+    username: str,
+    password: str,
+    source: str,
+    device: str,
+) -> str:
+    """Enable modem ETH1 (CG-3000 power saving). Lab LAN1 is cabled to that port."""
+    return _prepare_cg3000_throughput_lan1(host, username, password, source, device)
+
+
 def _prepare_cg3000_throughput_lan1(
     host: str,
     username: str,
@@ -534,33 +550,134 @@ def _prepare_cg3000_throughput_lan1(
     device: str,
 ) -> str:
     """Ensure modem ETH1 is enabled; lab throughput LAN1 is cabled to that port."""
+    referer = f"http://{host}/main.html"
+    status, html = _get(host, _ENERGY_CGI_PATH, username, password, source, device, timeout=10, referer=referer)
+    if status == 200 and _parse_cg3000_enabled_ports(html):
+        return _prepare_cg3000_energy_cgi(
+            host, username, password, source, device, html, path=_ENERGY_CGI_PATH, referer=referer
+        )
     path, html = _fetch_energy_page(host, username, password, source, device)
     if not path or not html:
         return "No se encontró Administración de energía; revisa ETH1 manualmente."
+    if _parse_cg3000_enabled_ports(html):
+        return _prepare_cg3000_energy_cgi(host, username, password, source, device, html, path=path, referer=referer)
     toggles, action, hidden, submit = _parse_energy_form(html)
     if not toggles:
         return "La página de energía no mostró puertos ETH; revisa ETH1 manualmente."
     eth1 = _find_port_toggle(toggles, _THROUGHPUT_MODEM_PORT)
     if not eth1:
         return "No se identificó ETH1 en energía; revisa LAN1 del throughput manualmente."
-    if eth1.enabled:
-        return f"{_THROUGHPUT_MODEM_PORT} ya estaba activo para LAN1 del throughput."
-    body = _energy_apply_body(toggles, force_enabled={_THROUGHPUT_MODEM_PORT}, hidden=hidden, submit=submit)
+    if eth1.enabled and verify_cg3000_eth1_enabled(html):
+        return f"{_THROUGHPUT_MODEM_PORT} verificado activo — listo para LAN1 del throughput."
+    body = _energy_apply_body(
+        toggles,
+        force_enabled={_THROUGHPUT_MODEM_PORT},
+        hidden=hidden,
+        submit=submit,
+        html=html,
+    )
     if not body:
-        return "No se pudo armar el formulario de energía; activa ETH1 en el portal."
+        return "No se pudo armar el formulario de energía; marca ETH1 y pulsa Aplicar/Guardar en el portal."
     post_path = action or path
-    referer = f"http://{host}{path}"
-    status, response = _post(host, post_path, username, password, source, device, body, referer=referer)
+    post_referer = f"http://{host}{path}"
+    status, response = _post(host, post_path, username, password, source, device, body, referer=post_referer)
     if status not in {200, 204, 302}:
-        return f"No se pudo aplicar energía (HTTP {status}); activa {_THROUGHPUT_MODEM_PORT} manualmente."
-    _status, verify_html = _get(host, path, username, password, source, device, timeout=12, referer=referer)
-    verify, _, _, _ = _parse_energy_form(verify_html or response)
-    eth1_after = _find_port_toggle(verify, _THROUGHPUT_MODEM_PORT) if verify else None
-    if eth1_after and eth1_after.enabled:
-        return f"{_THROUGHPUT_MODEM_PORT} activado para LAN1 del throughput (Aplicar/Guardar)."
-    if _eth1_marked_enabled(response or verify_html):
-        return f"{_THROUGHPUT_MODEM_PORT} activado para LAN1 del throughput."
-    return f"Se envió Aplicar/Guardar; confirma que {_THROUGHPUT_MODEM_PORT} quedó marcado en energía."
+        return f"No se pudo aplicar energía (HTTP {status}); marca {_THROUGHPUT_MODEM_PORT} y Aplicar/Guardar."
+    _status, verify_html = _get(host, path, username, password, source, device, timeout=12, referer=post_referer)
+    if verify_cg3000_eth1_enabled(verify_html or response or ""):
+        return (
+            f"{_THROUGHPUT_MODEM_PORT} activado y verificado (casilla marcada tras Aplicar/Guardar). "
+            "LAN1 del banco puede negociar enlace."
+        )
+    return (
+        f"FALLO: {_THROUGHPUT_MODEM_PORT} sigue desmarcado tras Aplicar/Guardar. "
+        "En Configuración avanzada → Administración de energía, marca ETH1 y guarda."
+    )
+
+
+def _parse_cg3000_enabled_ports(html: str) -> str:
+    match = re.search(r"var\s+enabledPorts\s*=\s*'([^']*)'", html or "", flags=re.I)
+    return match.group(1).strip() if match else ""
+
+
+def _cg3000_phy_enabled(html: str, phy_token: str) -> bool:
+    raw = _parse_cg3000_enabled_ports(html)
+    if not raw:
+        return False
+    for segment in raw.split("|"):
+        key, _, val = segment.partition(":")
+        if key.strip().lower() == phy_token.lower():
+            return val.strip() == "1"
+    return False
+
+
+def _cg3000_patch_enabled_ports(raw: str, phy_token: str, enabled: bool) -> str:
+    parts: list[str] = []
+    for segment in raw.split("|"):
+        if not segment.strip():
+            continue
+        key, sep, val = segment.partition(":")
+        if not sep:
+            parts.append(segment)
+            continue
+        if key.strip().lower() == phy_token.lower():
+            val = "1" if enabled else "0"
+        parts.append(f"{key.strip()}:{val.strip()}")
+    return "|".join(parts)
+
+
+def _prepare_cg3000_energy_cgi(
+    host: str,
+    username: str,
+    password: str,
+    source: str,
+    device: str,
+    html: str,
+    *,
+    path: str,
+    referer: str,
+) -> str:
+    """POST enabledPorts to cable_pwrmgt.cgi (checkboxes are built by document.write in the browser)."""
+    raw = _parse_cg3000_enabled_ports(html)
+    if not raw:
+        return "No se leyó enabledPorts en Administración de energía."
+    if _cg3000_phy_enabled(html, _CG3000_ETH1_PHY_TOKEN):
+        return (
+            f"{_THROUGHPUT_MODEM_PORT} verificado activo (eth3:1 en cable_pwrmgt.cgi) — listo para LAN1."
+        )
+    patched = _cg3000_patch_enabled_ports(raw, _CG3000_ETH1_PHY_TOKEN, True)
+    fields = {"enabledPorts": patched, "path_name": "cable_pwrmgt.html"}
+    body = urlencode(fields).encode("latin-1", errors="replace")
+    post_path = path if path.startswith("/") else f"/{path}"
+    if not post_path.endswith(".cgi"):
+        post_path = _ENERGY_CGI_PATH
+    headers = {"Content-Type": "application/x-www-form-urlencoded; charset=windows-1252"}
+    referer_cgi = f"http://{host}{_ENERGY_CGI_PATH}"
+    status, response = _post(
+        host,
+        post_path,
+        username,
+        password,
+        source,
+        device,
+        body,
+        referer=referer_cgi,
+        extra_headers=headers,
+    )
+    if status not in {200, 204, 302}:
+        return f"No se pudo aplicar energía en cable_pwrmgt.cgi (HTTP {status})."
+    _status, verify_html = _get(
+        host, _ENERGY_CGI_PATH, username, password, source, device, timeout=12, referer=referer_cgi
+    )
+    if _cg3000_phy_enabled(verify_html or response, _CG3000_ETH1_PHY_TOKEN):
+        return (
+            f"{_THROUGHPUT_MODEM_PORT} activado y verificado (eth3:1 tras Aplicar/Guardar vía CGI). "
+            "LAN1 del banco puede negociar enlace."
+        )
+    return (
+        f"FALLO: {_THROUGHPUT_MODEM_PORT} sigue apagado (eth3:0). "
+        "Marca ETH1 en Administración de energía y guarda manualmente."
+    )
 
 
 def _fetch_energy_page(
@@ -582,8 +699,33 @@ def _fetch_energy_page(
     return "", ""
 
 
+def verify_cg3000_eth1_enabled(html: str) -> bool:
+    """True when ETH1 is enabled (CG-3000 CGI eth3:1 or static checkbox)."""
+    if _parse_cg3000_enabled_ports(html):
+        return _cg3000_phy_enabled(html, _CG3000_ETH1_PHY_TOKEN)
+    toggles, _, _, _ = _parse_energy_form(html or "")
+    eth1 = _find_port_toggle(toggles, _THROUGHPUT_MODEM_PORT)
+    return bool(eth1 and eth1.enabled)
+
+
+def _energy_disable_when_checked(html: str) -> bool:
+    """When True, a checked box means the port is OFF. Kaon CG-3000 is the opposite."""
+    text = re.sub(r"\s+", " ", (html or "").lower())
+    if "desmarque" in text and "deshabilitar" in text:
+        return False
+    if "uncheck" in text and "disable" in text:
+        return False
+    if re.search(r"marque.*habilit|check.*enable", text):
+        return False
+    if re.search(r"casilla.*para\s+deshabilit|check.*to\s+disable", text):
+        return True
+    return False
+
+
 def _is_energy_page(html: str) -> bool:
     text = (html or "").lower()
+    if _parse_cg3000_enabled_ports(html):
+        return True
     if _THROUGHPUT_MODEM_PORT.lower() not in text:
         return False
     if any(hint in text for hint in ("administracion de energia", "administração de energia", "energy management")):
@@ -619,7 +761,9 @@ def _parse_energy_form(html: str) -> tuple[list[_PortToggle], str, dict[str, str
             if not label:
                 label = name
             checked = bool(re.search(r"\bchecked\b", tag, flags=re.I))
-            toggles.append(_PortToggle(label=label, name=name, enabled=checked, value=value))
+            disable_mode = _energy_disable_when_checked(block) or _energy_disable_when_checked(html)
+            port_live = (not checked) if disable_mode else checked
+            toggles.append(_PortToggle(label=label, name=name, enabled=port_live, value=value))
         if toggles:
             submit = _parse_submit_button(block)
             return toggles, action, hidden, submit
@@ -641,7 +785,9 @@ def _parse_energy_checkboxes_loose(html: str) -> list[_PortToggle]:
             continue
         checked = bool(re.search(r"\bchecked\b", tag, flags=re.I))
         value = (attrs.get("value") or "on").strip()
-        toggles.append(_PortToggle(label=label or name, name=name, enabled=checked, value=value))
+        disable_mode = _energy_disable_when_checked(html)
+        port_live = (not checked) if disable_mode else checked
+        toggles.append(_PortToggle(label=label or name, name=name, enabled=port_live, value=value))
     return toggles
 
 
@@ -708,11 +854,20 @@ def _energy_apply_body(
     force_enabled: set[str],
     hidden: dict[str, str],
     submit: tuple[str, str] | None,
+    html: str = "",
 ) -> bytes:
     fields: dict[str, str] = dict(hidden)
+    disable_mode = _energy_disable_when_checked(html)
     for item in toggles:
         label = re.sub(r"\s+", "", item.label.upper())
         must_enable = any(re.sub(r"\s+", "", token.upper()) in label for token in force_enabled)
+        if disable_mode:
+            if must_enable:
+                continue
+            if item.enabled:
+                continue
+            fields[item.name] = item.value or "on"
+            continue
         keep_enabled = item.enabled or must_enable
         if keep_enabled:
             fields[item.name] = item.value or "on"

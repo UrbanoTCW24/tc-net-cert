@@ -253,6 +253,72 @@ def restore_management_routing(
         executor.run(["nmcli", "device", "connect", wifi_iface], timeout=45)
 
 
+def lab_port_macs(config) -> set[str]:
+    """MACs assigned to LAN1..LAN8 in config (certification plane only)."""
+    from tc_net_cert.config.benches import live_ports_mac_map
+
+    return {str(mac).strip().lower() for mac in live_ports_mac_map(config).values() if str(mac).strip()}
+
+
+def iface_mac(iface: str) -> str:
+    from pathlib import Path
+
+    try:
+        return (Path("/sys/class/net") / iface / "address").read_text(encoding="utf-8").strip().lower()
+    except OSError:
+        return ""
+
+
+def management_blocked_macs(config) -> set[str]:
+    """NICs used for Internet/admin — never scrape or show as bench DUT."""
+    from tc_net_cert.config.loader import normalize_mac
+    from tc_net_cert.core.executor import SystemExecutor
+    from tc_net_cert.network.discovery import discover_interfaces
+
+    lab = lab_port_macs(config)
+    blocked: set[str] = set()
+    raw = str(getattr(config, "management_mac", "") or "").strip()
+    if raw:
+        try:
+            blocked.add(normalize_mac(raw).lower())
+        except Exception:
+            pass
+    try:
+        executor = SystemExecutor()
+        interfaces = discover_interfaces(executor)
+        plane = detect_management(executor, interfaces)
+        by_name = {item.name: item for item in interfaces}
+        for dev in plane.protected_interfaces:
+            record = by_name.get(dev)
+            if record is None:
+                continue
+            mac = str(record.mac or "").strip().lower()
+            if mac and mac not in lab:
+                blocked.add(mac)
+        default_dev = str(plane.default_route_interface or "").strip()
+        if default_dev in by_name:
+            mac = str(by_name[default_dev].mac or "").strip().lower()
+            if mac and mac not in lab:
+                blocked.add(mac)
+    except Exception:
+        pass
+    return blocked
+
+
+def cable_on_lab_plane(config, cable: dict[str, str], *, bench_macs: set[str] | None = None) -> bool:
+    """True when the scrape path uses a bench NIC, not administration/uplink."""
+    blocked = management_blocked_macs(config)
+    mac = iface_mac(str(cable.get("iface") or ""))
+    if not mac:
+        return False
+    if mac in blocked:
+        return False
+    allowed = {m.lower() for m in (bench_macs or set()) if m}
+    if allowed and mac not in allowed:
+        return False
+    return True
+
+
 def refresh_portal_links(executor: Executor, port_macs: dict[str, str]) -> list[str]:
     """Renew DHCP only on lab ports that lost an address. Skips links that already have IP (no NM bounce)."""
     from pathlib import Path

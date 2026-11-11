@@ -272,9 +272,10 @@
       </div>
     </div>
     <div class="device-card">
-      <p class="label">Equipo detectado</p>
-      <p id="sidebar-device-name">{{ dut_model or "Sin equipo" }}</p>
-      <p id="sidebar-device-kind">{{ dut_type|upper }}</p>
+      <p class="label">Equipo en bancos (LAN certificación)</p>
+      <p id="sidebar-device-name">{{ sidebar_device_name | default("Sin equipo en bancos", true) }}</p>
+      <p id="sidebar-device-kind">{{ sidebar_device_kind | default("LAB", true) }}</p>
+      <p class="note" style="margin:0.35rem 0 0;font-size:0.68rem;opacity:0.85;">La LAN de administración (Internet/sync) no entra al LAB ni al Buscar de bancos.</p>
     </div>
     <nav>
       <div class="nav-label">Módulos de prueba</div>
@@ -495,7 +496,7 @@
               <label for="bench-b-user">Usuario</label>
               <input id="bench-b-user" type="text" value="{{ portal_user }}" autocomplete="off" spellcheck="false">
               <label for="bench-b-password">Contraseña</label>
-              <input id="bench-b-password" type="password" value="" autocomplete="off">
+              <input id="bench-b-password" type="password" value="{{ portal_password }}" autocomplete="off">
               <label class="bench-span-2" for="bench-b-host">Portal IP</label>
               <input class="bench-span-2" id="bench-b-host" type="text" placeholder="192.168.1.1 · vacío = DHCP" autocomplete="off" spellcheck="false">
             </div>
@@ -910,8 +911,13 @@
     const banner = document.getElementById("banner");
     const feedback = document.getElementById("feedback");
     const portalFeedback = document.getElementById("portal-feedback");
-    function showLiveModule() {
+    function openLiveTab() {
       document.querySelector('.nav-item[data-tab="live"]')?.click();
+    }
+
+    function showLiveModule(onlyIfRunning) {
+      if (onlyIfRunning && !jobWasRunning) return;
+      openLiveTab();
     }
 
     function setPortalFeedback(text) {
@@ -928,6 +934,10 @@
       return "";
     }
 
+    function portalWorkflowActive() {
+      return userPortalPin === "emta" || userPortalPin === "ont" || activePortal === "emta" || activePortal === "ont";
+    }
+
     function showPreflightAbort(job) {
       const pf = preflightErrorFromLog(job && job.log);
       if (!pf) return false;
@@ -935,14 +945,29 @@
       if (/management-protection/i.test(pf)) {
         msg += " Pulsa Recuperar namespaces (arriba), espera 5 s y vuelve a 2 · Certificar.";
       }
+      if (/mac-present|Missing LAN/i.test(pf)) {
+        msg +=
+          " Asigna las NIC con Remapear LAN en cada banco (throughput A+B necesita 8 puertos mapeados en la PC).";
+      }
+      if (/namespaces-clear|ns-lan/i.test(pf)) {
+        msg += " Quedaron namespaces colgados; el panel ya intenta recuperarlos al pulsar Certificar de nuevo.";
+      }
       setPortalFeedback(msg);
       feedback.textContent = msg;
-      document.querySelector('.nav-item[data-tab="live"]')?.click();
+      openLiveTab();
       if (log) {
         log.hidden = false;
         log.scrollIntoView({behavior: "smooth", block: "nearest"});
       }
       return true;
+    }
+
+    function restorePortalModuleTab() {
+      const pin = userPortalPin || activePortal;
+      if (pin !== "emta" && pin !== "ont") return;
+      const tab = document.querySelector('.nav-item[data-tab="' + pin + '"]');
+      if (!tab || tab.disabled) return;
+      tab.click();
     }
     const STALE_PANEL = "La página expiró. Recarga el panel.";
     const _fetch = window.fetch.bind(window);
@@ -1067,6 +1092,7 @@
     let anchor = null;
     let appliedModel = "";
     let jobWasRunning = false;
+    let preflightAnnounced = false;
     /** Activo mientras corre una certificación de los 8 LAN (ambos bancos). */
     let dualCertQueue = null;
 
@@ -1231,10 +1257,14 @@
     stage.addEventListener("change", durationState);
     durationState();
 
-    let portalFromDiscovery = {{ "true" if dut_type == "emta" else "false" }};
+    let portalFromDiscovery = {{ "true" if (sidebar_device_kind | default("", true) | lower) == "emta" else "false" }};
 
     function applyDetectedModel(model) {
       if (!model || appliedModel === model) return;
+      const token = String(model || "").trim().toUpperCase();
+      const onBenches = detectedFamily();
+      if (onBenches === "emta" && token.startsWith("HG")) return;
+      if (onBenches === "ont" && (token.startsWith("CG") || token.includes("CGNV"))) return;
       appliedModel = model;
       const input = document.getElementById("portal-model");
       const note = document.getElementById("detected-model");
@@ -1273,7 +1303,9 @@
       document.getElementById("scrape").disabled = Boolean(job.running);
       document.getElementById("discover").disabled = Boolean(job.running);
       const dualCertBtn = document.getElementById("certify-benches-both");
-      if (dualCertBtn) dualCertBtn.disabled = button.disabled;
+      if (dualCertBtn) {
+        dualCertBtn.disabled = Boolean(job.running) || !job.can_launch;
+      }
       document.querySelectorAll("[data-bench-cert]").forEach((node) => {
         const benchId = node.getAttribute("data-bench-cert") || "A";
         node.disabled = button.disabled || technologyBlockedForBench(benchId);
@@ -1291,8 +1323,20 @@
         log.textContent = job.log;
         logDownload.hidden = false;
       }
-      if (!job.running && job.log && job.log.includes("PREFLIGHT FAIL") && job.log.includes("FINAL RESULT: FAIL")) {
+      if (job.running) {
+        preflightAnnounced = false;
+      }
+      if (
+        jobWasRunning
+        && !job.running
+        && job.log
+        && job.log.includes("PREFLIGHT FAIL")
+        && job.log.includes("FINAL RESULT: FAIL")
+        && !preflightAnnounced
+      ) {
+        preflightAnnounced = true;
         showPreflightAbort(job);
+        restorePortalModuleTab();
       }
       paintLive(job);
       if (!job.running && (feedback.textContent === "Prueba iniciada." || feedback.textContent === "Iniciando…")) {
@@ -1689,33 +1733,125 @@
       wifi: ["Módulo Wi-Fi", "Throughput independiente: primero 5 GHz y después 2.4 GHz, hacia LAN2 o LAN3."]
     };
     let activePortal = "";
+    let userPortalPin = "";
+    try {
+      userPortalPin = sessionStorage.getItem("tc-portal-pin") || "";
+    } catch (_pinErr) {
+      userPortalPin = "";
+    }
+
+    function provenBenchFamily() {
+      for (const benchId of ["A", "B"]) {
+        const row = benchIdentityForBench(benchId);
+        if (!row || !row.serial) continue;
+        if (row.family === "ont" || row.family === "emta") return row.family;
+        const inferred = inferFamilyFromModel(row.model);
+        if (inferred) return inferred;
+      }
+      return "";
+    }
 
     function detectedFamily() {
+      const proven = provenBenchFamily();
+      if (proven) return proven;
       const a = benchDetectedFamily("A");
       const b = benchDetectedFamily("B");
       if (a && b && a === b) return a;
       if (a && !b) return a;
       if (b && !a) return b;
-      const family = lastReading && lastReading.family;
-      if (family === "ont" || family === "emta") return family;
+      if (userPortalPin === "emta" || userPortalPin === "ont") return userPortalPin;
+      if (activePortal === "emta" || activePortal === "ont") return activePortal;
       return a || b || "";
+    }
+
+    function resolvedPortalModule() {
+      const proven = provenBenchFamily();
+      if (proven) return proven;
+      if (userPortalPin === "emta" || userPortalPin === "ont") return userPortalPin;
+      if (activePortal === "emta" || activePortal === "ont") return activePortal;
+      return "ont";
+    }
+
+    function portalUiFamily(found) {
+      const row = found || {};
+      if (row.family === "emta" || row.family === "ont") return row.family;
+      const inferred = inferFamilyFromModel(row.model);
+      if (inferred) return inferred;
+      const module = resolvedPortalModule();
+      return module === "emta" ? "emta" : "ont";
+    }
+
+    function bestBenchIdentity() {
+      for (const benchId of ["A", "B"]) {
+        const row = benchIdentityForBench(benchId);
+        if (row && row.serial) return row;
+      }
+      for (const benchId of ["A", "B"]) {
+        const row = benchIdentityForBench(benchId);
+        if (row && row.model) return row;
+      }
+      return lastReading && (lastReading.serial || lastReading.model) ? lastReading : null;
     }
 
     function syncSidebarDevice() {
       const nameEl = document.getElementById("sidebar-device-name");
       const kindEl = document.getElementById("sidebar-device-kind");
       if (!nameEl || !kindEl) return;
-      const pick = benchIdentities.A && benchIdentities.A.serial
-        ? benchIdentities.A
-        : (benchIdentities.B && benchIdentities.B.serial ? benchIdentities.B : lastReading);
+      const pick = bestBenchIdentity();
       if (!pick || !pick.model) {
         nameEl.textContent = "Sin equipo";
         kindEl.textContent = "—";
         return;
       }
-      nameEl.textContent = pick.model;
+      const label = [pick.brand, pick.model].filter(Boolean).join(" ") || pick.model;
+      nameEl.textContent = label;
       const fam = pick.family || inferFamilyFromModel(pick.model);
-      kindEl.textContent = fam === "emta" ? "EMTA" : (fam === "ont" ? "ONT" : "—");
+      kindEl.textContent = fam === "emta" ? "EMTA" : (fam === "ont" ? "ONT" : (pick.serial ? "—" : "LAB"));
+    }
+
+    function focusPortalModuleFromBenches() {
+      const proven = provenBenchFamily();
+      if (proven && activePortal !== proven) {
+        activatePortalModule(proven);
+        userPortalPin = proven;
+        try {
+          sessionStorage.setItem("tc-portal-pin", proven);
+        } catch (_err) {
+          /* ignore */
+        }
+      } else if (!proven && (userPortalPin === "emta" || userPortalPin === "ont") && activePortal !== userPortalPin) {
+        activatePortalModule(userPortalPin);
+      }
+      syncSidebarDevice();
+      applyTechnologyLock(Boolean(stop && stop.disabled));
+    }
+
+    function alignBenchProfilesToPortalTab(module) {
+      const pick =
+        module === "emta"
+          ? (portals.find((item) => item.model === "CG-3000") ? "CG-3000" : "CG-2200")
+          : (portals.find((item) => item.model === "HG8245W5-6T") ? "HG8245W5-6T" : "");
+      for (const benchId of ["A", "B"]) {
+        const prefix = benchId === "B" ? "b" : "a";
+        const prof = document.getElementById("bench-" + prefix + "-profile");
+        if (!prof) continue;
+        const val = prof.value.trim();
+        const up = val.toUpperCase();
+        const wrong =
+          module === "emta"
+            ? !val || up.startsWith("HG") || up === "KAON"
+            : !val || up.startsWith("CG") || up.includes("CGNV");
+        if (wrong && pick) {
+          prof.value = pick;
+          applyBenchProfile(benchId);
+        }
+      }
+      if (module === "emta") {
+        fixAllEmtaBenchUsers(false);
+        paintEmtaUsuarioHints();
+      }
+      paintAllReadings();
+      saveBenchCredentialsToStorage();
     }
 
     function inferFamilyFromModel(model) {
@@ -1751,7 +1887,7 @@
     }
 
     function applyTechnologyLock(running) {
-      const family = detectedFamily();
+      const family = provenBenchFamily();
       document.querySelectorAll('.nav-item[data-tab="ont"], .nav-item[data-tab="emta"]').forEach((node) => {
         node.disabled = Boolean(family) && node.dataset.tab !== family;
       });
@@ -1776,7 +1912,16 @@
         document.querySelectorAll(".nav-item").forEach((node) => node.classList.remove("active"));
         item.classList.add("active");
         const name = item.dataset.tab;
-        if (name === "ont" || name === "emta") activePortal = name;
+        if (name === "ont" || name === "emta") {
+          activePortal = name;
+          userPortalPin = name;
+          try {
+            sessionStorage.setItem("tc-portal-pin", name);
+          } catch (_err) {
+            /* ignore */
+          }
+          alignBenchProfilesToPortalTab(name);
+        }
         const moduleName = item.dataset.module || name;
         document.querySelectorAll(".module").forEach((node) => { node.hidden = node.id !== "module-" + moduleName; });
         const copy = tabCopy[name];
@@ -1786,7 +1931,8 @@
         const portalNote = document.getElementById("portal-module-note");
         if (name === "emta") {
           portalTitle.textContent = "Laboratorio de Certificación";
-          portalNote.textContent = "DOCSIS. Kaon CG-2200 y Hitron CGNV5 usan portal distinto. Buscar lee el modelo real del cable.";
+          portalNote.textContent =
+            "DOCSIS. Usuario del portal: admin (no escribas CG-3000 ni el modelo en Usuario). Clave típica Cl@r0. Buscar lee el modelo real del cable.";
           const modelInput = document.getElementById("portal-model");
           const passInput = document.getElementById("dut-password");
           if (modelInput) {
@@ -1799,11 +1945,13 @@
             passInput.value = "";
             setPortalFeedback("Los EMTA no usan la clave Huawei c1@r0. Escribe admin / Cl@r0 (o la del módem) y pulsa Buscar.");
           }
-          if (!lastReading) paintReading({family: "emta"});
+          fixAllEmtaBenchUsers(false);
+          paintEmtaUsuarioHints();
+          paintAllReadings();
         } else if (name === "ont") {
           portalTitle.textContent = "Laboratorio de Certificación";
           portalNote.textContent = "GPON. La huella lee RX y TX por el cable Ethernet. Después arranca la medición en vivo.";
-          if (!lastReading) paintReading({family: "ont"});
+          paintAllReadings();
         } else if (name === "wifi") {
           loadWifiNetworks(true);
         }
@@ -1821,6 +1969,12 @@
 
     function hasFullInventory(data) {
       if (!data || !data.serial) return false;
+      const emta = data.family === "emta" || inferFamilyFromModel(data.model) === "emta";
+      if (emta) {
+        return Boolean(
+          data.docsis_status || data.ds_channels || data.us_channels || data.hardware || data.software
+        );
+      }
       return Boolean(
         data.hardware || data.software || data.tx_power || data.rx_power || data.temperature || data.ont_state
       );
@@ -1838,7 +1992,7 @@
     let lastReading = null;
 
     function readingFieldRows(found) {
-      const emta = found && found.family === "emta";
+      const emta = portalUiFamily(found) === "emta";
       if (emta) {
         return [
           ["DEVICE TYPE", found.model],
@@ -1906,8 +2060,12 @@
       if (found && found.serial) {
         const fam = found.family || inferFamilyFromModel(found.model);
         if (fam === "ont" || fam === "emta") found.family = fam;
+        const merged = mergeBenchInventory(benchId, found);
+        benchInventories[benchId] = merged;
+        benchIdentities[benchId] = Object.assign({}, benchIdentities[benchId] || {}, merged);
+        paintBenchHeader(benchId, merged);
         if (benchId === "A" || !benchIdentities.A.serial) {
-          lastReading = Object.assign({}, found);
+          lastReading = Object.assign({}, merged);
         }
         syncSidebarDevice();
         applyTechnologyLock(Boolean(stop && !stop.disabled));
@@ -1918,7 +2076,8 @@
       const box = document.getElementById("reading-bank-" + benchId.toLowerCase());
       if (!box) return;
       box.replaceChildren();
-      const rows = readingFieldRows({family: "ont"});
+      const id = benchIdentityForBench(benchId);
+      const rows = readingFieldRows({family: portalUiFamily(id)});
       rows.forEach((card) => {
         const node = document.createElement("article");
         node.className = "metric";
@@ -1995,7 +2154,9 @@
       const current = input.value.trim();
       if (!current || current !== token) {
         input.value = token;
-        saveBenchCredentialsToStorage();
+        applyBenchProfile(benchId);
+        fixBenchPortalUser(benchId, true, false);
+        paintEmtaUsuarioHints();
       }
     }
 
@@ -2117,16 +2278,194 @@
       };
     }
 
+    function emtaPortalKind(model, kindHint) {
+      const kind = String(kindHint || "").toLowerCase();
+      if (kind.startsWith("emta")) return true;
+      return inferFamilyFromModel(model) === "emta";
+    }
+
+    function looksLikeModelPortalUser(model, user) {
+      const token = String(model || "").trim().toUpperCase().replace(/\s+/g, "");
+      const login = String(user || "").trim().toUpperCase().replace(/\s+/g, "");
+      if (!token || !login) return false;
+      if (login === token) return true;
+      if (login === "KAON" && (token.startsWith("CG") || token === "KAON")) return true;
+      if (/^CG-?\d{4}$/.test(login) || /^CGNV\d+/.test(login.replace(/-/g, ""))) return true;
+      if (["CG-2200", "CG2200", "CG-3000", "CG3000"].includes(login) && token.startsWith("CG")) return true;
+      return false;
+    }
+
+    const EMTA_PORTAL_USER_PLACEHOLDER = "admin (no el modelo CG-3000 / CG-2200)";
+
+    function kindHintForModel(model) {
+      const saved = portals.find((item) => item.model === model);
+      return saved && saved.kind;
+    }
+
+    function normalizeEmtaBenchUser(model, user, kindHint) {
+      if (!emtaPortalKind(model, kindHint)) return user;
+      if (!looksLikeModelPortalUser(model, user)) return user;
+      return "admin";
+    }
+
+    function syncPortalCredsFromBench(benchId) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const portalModel = document.getElementById("bench-" + prefix + "-profile").value.trim();
+      const mainModel = document.getElementById("portal-model").value.trim();
+      if (!portalModel) return;
+      if (mainModel && mainModel !== portalModel) return;
+      const portalHost = document.getElementById("bench-" + prefix + "-host").value.trim()
+        || document.getElementById("portal-host").value.trim();
+      const dutUser = document.getElementById("bench-" + prefix + "-user").value.trim();
+      document.getElementById("portal-model").value = portalModel;
+      if (portalHost) document.getElementById("portal-host").value = portalHost;
+      if (dutUser) document.getElementById("dut-user").value = dutUser;
+    }
+
+    function paintEmtaUsuarioHints() {
+      const moduleEmta = activePortal === "emta";
+      for (const benchId of ["A", "B"]) {
+        const prefix = benchId === "B" ? "b" : "a";
+        const model = document.getElementById("bench-" + prefix + "-profile").value.trim();
+        const field = document.getElementById("bench-" + prefix + "-user");
+        const label = document.querySelector('label[for="bench-' + prefix + '-user"]');
+        if (!field) continue;
+        const emta = moduleEmta || emtaPortalKind(model, kindHintForModel(model));
+        field.placeholder = emta ? EMTA_PORTAL_USER_PLACEHOLDER : "";
+        field.setAttribute("aria-description", emta ? EMTA_PORTAL_USER_PLACEHOLDER : "");
+        if (label) label.textContent = emta ? "Usuario portal (admin)" : "Usuario";
+      }
+    }
+
+    function fixBenchPortalUser(benchId, write, announce) {
+      const prefix = benchId === "B" ? "b" : "a";
+      const model = document.getElementById("bench-" + prefix + "-profile").value.trim();
+      const field = document.getElementById("bench-" + prefix + "-user");
+      if (!field) return false;
+      if (!model) return false;
+      const kind = kindHintForModel(model);
+      const before = field.value.trim();
+      const fixed = normalizeEmtaBenchUser(model, before, kind);
+      if (fixed === before) return false;
+      field.value = fixed;
+      if (write) saveBenchCredentialsToStorage();
+      syncPortalCredsFromBench(benchId);
+      paintEmtaUsuarioHints();
+      if (announce) {
+        setPortalFeedback(
+          "Banco " + benchId + ": en EMTA el login del portal es admin, no «" + before + "». Se corrigió en el formulario."
+        );
+      }
+      return true;
+    }
+
+    function fixAllEmtaBenchUsers(announce) {
+      return fixBenchPortalUser("A", true, announce) || fixBenchPortalUser("B", true, announce);
+    }
+
+    function portalPasswordUsable(value) {
+      const text = String(value || "").trim();
+      if (!text) return false;
+      if (text.includes("REEMPLAZAR")) return false;
+      return true;
+    }
+
+    function mirrorBenchCredentials(fromBench, toBench) {
+      const fromPrefix = fromBench === "B" ? "b" : "a";
+      const toPrefix = toBench === "B" ? "b" : "a";
+      const fields = [
+        ["-profile", "portal_model"],
+        ["-user", "dut_user"],
+        ["-password", "dut_password"],
+        ["-host", "portal_host"],
+      ];
+      for (const [suffix] of fields) {
+        const src = document.getElementById("bench-" + fromPrefix + suffix);
+        const dst = document.getElementById("bench-" + toPrefix + suffix);
+        if (!src || !dst) continue;
+        const srcVal = suffix === "-password" ? src.value : src.value.trim();
+        const dstVal = suffix === "-password" ? dst.value : dst.value.trim();
+        if (srcVal && !dstVal) {
+          dst.value = srcVal;
+        }
+      }
+      if (!document.getElementById("bench-" + toPrefix + "-profile").value.trim()) {
+        document.getElementById("bench-" + toPrefix + "-profile").value =
+          document.getElementById("bench-" + fromPrefix + "-profile").value.trim();
+      }
+      fixBenchPortalUser(toBench, false, false);
+    }
+
+    function ensureBenchPortalCredentials(benchId) {
+      const prefix = benchId === "B" ? "b" : "a";
+      let model = document.getElementById("bench-" + prefix + "-profile").value.trim();
+      const userEl = document.getElementById("bench-" + prefix + "-user");
+      const passEl = document.getElementById("bench-" + prefix + "-password");
+      const hostEl = document.getElementById("bench-" + prefix + "-host");
+      if (!userEl || !passEl) return false;
+      if (!model && (resolvedPortalModule() === "emta")) {
+        model = portals.find((item) => item.model === "CG-3000") ? "CG-3000" : "CG-2200";
+        document.getElementById("bench-" + prefix + "-profile").value = model;
+      }
+      const saved = portals.find((item) => item.model === model);
+      let touched = false;
+      if (saved) {
+        if (!userEl.value.trim()) {
+          userEl.value = normalizeEmtaBenchUser(model, saved.username || "", saved.kind);
+          touched = true;
+        }
+        if (!portalPasswordUsable(passEl.value) && portalPasswordUsable(saved.password)) {
+          passEl.value = saved.password;
+          touched = true;
+        }
+        if (hostEl && !hostEl.value.trim() && saved.host) {
+          hostEl.value = saved.host;
+          touched = true;
+        }
+      }
+      fixBenchPortalUser(benchId, false, false);
+      if (touched) saveBenchCredentialsToStorage();
+      return Boolean(userEl.value.trim() && portalPasswordUsable(passEl.value));
+    }
+
+    function prepareDiscoverCredentials(targets) {
+      const module = resolvedPortalModule();
+      if (module === "emta" || module === "ont") {
+        alignBenchProfilesToPortalTab(module);
+      }
+      for (const benchId of targets) {
+        ensureBenchPortalCredentials(benchId);
+      }
+      if (targets.includes("A") && targets.includes("B")) {
+        mirrorBenchCredentials("A", "B");
+        mirrorBenchCredentials("B", "A");
+      }
+      const missing = [];
+      for (const benchId of targets) {
+        const creds = benchCredentialFields(benchId);
+        if (!creds.portal_model) missing.push("Banco " + benchId + ": modelo");
+        else if (!creds.dut_user) missing.push("Banco " + benchId + ": usuario");
+        else if (!portalPasswordUsable(creds.dut_password)) missing.push("Banco " + benchId + ": contraseña");
+      }
+      return missing;
+    }
+
     function applyBenchProfile(benchId) {
       const prefix = benchId === "B" ? "b" : "a";
       const model = document.getElementById("bench-" + prefix + "-profile").value.trim();
       if (!model) return;
       const saved = portals.find((item) => item.model === model);
-      if (!saved) return;
-      document.getElementById("bench-" + prefix + "-user").value = saved.username || "";
+      if (!saved) {
+        paintEmtaUsuarioHints();
+        return;
+      }
+      const user = normalizeEmtaBenchUser(model, saved.username || "", saved.kind);
+      document.getElementById("bench-" + prefix + "-user").value = user;
       document.getElementById("bench-" + prefix + "-password").value = saved.password || "";
       if (saved.host) document.getElementById("bench-" + prefix + "-host").value = saved.host;
       document.getElementById("portal-model").value = model;
+      syncPortalCredsFromBench(benchId);
+      paintEmtaUsuarioHints();
       saveBenchCredentialsToStorage();
     }
 
@@ -2134,10 +2473,14 @@
       const prefix = benchId === "B" ? "b" : "a";
       const globalHost = document.getElementById("portal-host").value.trim();
       const profile = document.getElementById("bench-" + prefix + "-profile").value.trim();
+      fixBenchPortalUser(benchId, false, false);
+      const userEl = document.getElementById("bench-" + prefix + "-user");
+      const passEl = document.getElementById("bench-" + prefix + "-password");
+      const hostEl = document.getElementById("bench-" + prefix + "-host");
       return {
-        dut_user: document.getElementById("bench-" + prefix + "-user").value.trim(),
-        dut_password: document.getElementById("bench-" + prefix + "-password").value,
-        portal_host: document.getElementById("bench-" + prefix + "-host").value.trim() || globalHost,
+        dut_user: userEl ? userEl.value.trim() : "",
+        dut_password: passEl ? passEl.value : "",
+        portal_host: (hostEl && hostEl.value.trim()) || globalHost,
         portal_model: profile || document.getElementById("portal-model").value.trim()
       };
     }
@@ -2155,11 +2498,23 @@
           const prefix = benchId === "B" ? "b" : "a";
           const block = data[benchId];
           if (!block) continue;
-          if (block.dut_user) document.getElementById("bench-" + prefix + "-user").value = block.dut_user;
-          if (block.dut_password) document.getElementById("bench-" + prefix + "-password").value = block.dut_password;
-          if (block.portal_host) document.getElementById("bench-" + prefix + "-host").value = block.portal_host;
           if (block.portal_model) document.getElementById("bench-" + prefix + "-profile").value = block.portal_model;
+          const model = block.portal_model || "";
+          const saved = portals.find((item) => item.model === model);
+          const user = normalizeEmtaBenchUser(model, block.dut_user || "", saved && saved.kind);
+          const userEl = document.getElementById("bench-" + prefix + "-user");
+          const passEl = document.getElementById("bench-" + prefix + "-password");
+          if (block.dut_user && String(block.dut_user).trim() && userEl) {
+            userEl.value = user || block.dut_user;
+          } else if (user && userEl) {
+            userEl.value = user;
+          }
+          if (block.dut_password && String(block.dut_password).trim() && passEl) {
+            passEl.value = block.dut_password;
+          }
+          if (block.portal_host) document.getElementById("bench-" + prefix + "-host").value = block.portal_host;
         }
+        fixAllEmtaBenchUsers();
       } catch (_err) {
         /* ignore */
       }
@@ -2253,12 +2608,20 @@
             portal_host: portalHost,
             dut_user: dutUser,
             dut_password: dutPassword,
-            portal_module: options && options.portalModule || "",
+            portal_module: (options && options.portalModule) || resolvedPortalModule(),
             bench_id: scopeBench,
             bench_credentials: dualEight ? benchCredentialsPayload() : undefined
           }, wifiPayload(), lastIdentity))
         });
         started = await response.json();
+        if (response.status === 403) {
+          started = Object.assign({ok: false}, started, {
+            error: (started && started.error) || "La página expiró. Pulsa Ctrl+F5 y vuelve a intentar."
+          });
+        } else if (response.status >= 400 && started && !started.error) {
+          started.ok = false;
+          started.error = "El panel rechazó la corrida (HTTP " + response.status + ").";
+        }
       } catch (_err) {
         const lost = "No hubo respuesta del panel. Recarga con Ctrl+F5 y pulsa Recuperar namespaces.";
         feedback.textContent = lost;
@@ -2268,10 +2631,17 @@
       }
       if (!started.ok) {
         activeCertBenchId = "";
+        button.disabled = false;
       }
-      const result = started.ok ? "Prueba iniciada." : (started.error || "No se pudo iniciar.");
+      const result = started.ok
+        ? (started.running ? "Prueba en curso." : "Prueba iniciada.")
+        : (started.error || "No se pudo iniciar.");
       feedback.textContent = result;
       setPortalFeedback(result);
+      if (started.ok) {
+        openLiveTab();
+        dualCertQueue = dualCertQueue || (!scopeBench && stationPortCount >= 8 ? {active: true} : null);
+      }
       if (wifiFeedback) wifiFeedback.textContent = result;
       paint(started);
       return started;
@@ -2394,8 +2764,10 @@
       const saved = portals.find((item) => item.model === name);
       if (!saved) return;
       document.getElementById("portal-host").value = saved.host;
-      document.getElementById("dut-user").value = saved.username;
+      document.getElementById("dut-user").value = normalizeEmtaBenchUser(name, saved.username || "", saved.kind);
       document.getElementById("dut-password").value = saved.password;
+      fixAllEmtaBenchUsers(false);
+      paintEmtaUsuarioHints();
     });
 
     function inventoryText(found) {
@@ -2459,9 +2831,24 @@
         document.getElementById("portal-model").value = found.profile;
       }
       if (saved) {
+        const profileModel = document.getElementById("portal-model").value.trim() || saved.model || shown;
         document.getElementById("portal-host").value = saved.host;
-        document.getElementById("dut-user").value = saved.username;
+        document.getElementById("dut-user").value = normalizeEmtaBenchUser(
+          profileModel,
+          saved.username || "",
+          saved.kind || (found.family === "emta" ? "emta" : "")
+        );
         document.getElementById("dut-password").value = saved.password;
+        if (found.family === "emta") {
+          for (const benchId of ["A", "B"]) {
+            const prefix = benchId === "B" ? "b" : "a";
+            const prof = document.getElementById("bench-" + prefix + "-profile");
+            if (prof && (!prof.value.trim() || prof.value.trim() === profileModel)) {
+              prof.value = profileModel;
+              applyBenchProfile(benchId);
+            }
+          }
+        }
       } else if (shown === "CGNV5") {
         const passInput = document.getElementById("dut-password");
         if (passInput && passInput.value === "c1@r0") passInput.value = "";
@@ -2621,6 +3008,8 @@
         paintReadingBench(benchId, merged);
       }
       saveBenchInventoryToStorage();
+      syncSidebarDevice();
+      if (provenBenchFamily()) focusPortalModuleFromBenches();
     }
 
     function clearBenchReadingUi(benchId) {
@@ -2694,16 +3083,26 @@
     async function discoverBenches(scope) {
       const mode = normalizeBenchScope(scope);
       const targets = mode === "all" ? ["A", "B"] : [mode];
-      for (const benchId of targets) {
-        const creds = benchCredentialFields(benchId);
-        if (!creds.dut_user || !creds.dut_password) {
-          setPortalFeedback(
-            "Banco " + benchId + ": escribe usuario y contraseña en su tarjeta "
-            + "(marca Ver contraseña si ya las guardaste)."
-          );
-          setBenchRouteNote(benchId, "Falta usuario o contraseña en esta tarjeta.");
-          return;
+      const portalTabBefore = userPortalPin || activePortal;
+      if (fixAllEmtaBenchUsers(true)) {
+        saveBenchCredentialsToStorage();
+      }
+      const missing = prepareDiscoverCredentials(targets);
+      if (missing.length) {
+        setPortalFeedback(
+          "No se llamó al scraper: " + missing.join("; ")
+          + ". En EMTA usa CG-3000, admin y Cl@r0 (Guardar perfil o Ver contraseña)."
+        );
+        for (const benchId of targets) {
+          const creds = benchCredentialFields(benchId);
+          const note =
+            !creds.portal_model || !creds.dut_user || !portalPasswordUsable(creds.dut_password)
+              ? "Falta usuario o contraseña en esta tarjeta."
+              : "Listo para Buscar.";
+          setBenchRouteNote(benchId, note);
         }
+        restorePortalModuleTab();
+        return;
       }
       saveBenchCredentialsToStorage();
       setDiscoverButtonsDisabled(mode, true);
@@ -2716,10 +3115,13 @@
       setPortalFeedback(waiting);
       const fallback = benchCredentialFields("A");
       let payload;
+      const abort = new AbortController();
+      const discoverTimer = window.setTimeout(() => abort.abort(), 180000);
       try {
         const response = await fetch("/api/benches/discover", {
           method: "POST",
           headers: {"Content-Type": "application/json"},
+          signal: abort.signal,
           body: JSON.stringify({
             token,
             scope: mode,
@@ -2732,12 +3134,20 @@
         });
         payload = await response.json();
       } catch (_err) {
-        setPortalFeedback("No se pudo contactar al panel. Recarga e intenta de nuevo.");
-        setDiscoverButtonsDisabled(mode, false);
+        const timedOut = _err && _err.name === "AbortError";
+        setPortalFeedback(
+          timedOut
+            ? "El scraper tardó más de 3 min. Si acabas de certificar, pulsa Recuperar namespaces y Buscar de nuevo."
+            : "No se pudo contactar al panel. Recarga e intenta de nuevo."
+        );
         for (const benchId of targets) {
-          paintReadingBench(benchId, benchReadingData(benchId));
+          paintReadingBench(benchId, benchReadingData(benchId) || {});
         }
+        setDiscoverButtonsDisabled(mode, false);
+        restorePortalModuleTab();
         return;
+      } finally {
+        window.clearTimeout(discoverTimer);
       }
       const items = (payload.benches || []).filter((row) => !row.bench_id || targets.includes(row.bench_id));
       let successIds = [];
@@ -2770,11 +3180,29 @@
         } else if (item.bench_id) {
           applyDetectedBenchProfile(item.bench_id, item.model || item.device_type);
           let message = item.error || "No se leyó el portal.";
-          if (item.model) {
+          const errPrefix = item.bench_id === "B" ? "b" : "a";
+          const errModel = document.getElementById("bench-" + errPrefix + "-profile").value.trim()
+            || item.model || "";
+          const errUser = document.getElementById("bench-" + errPrefix + "-user").value.trim();
+          if (looksLikeModelPortalUser(errModel, errUser)) {
+            fixBenchPortalUser(item.bench_id, true, true);
+            message =
+              "Usuario del portal: use admin (no «" + errUser + "»). Contraseña suele ser Cl@r0. " + message;
+          } else if (item.model) {
             message += " Detectado: " + item.model + ". Corrige la contraseña, Guardar perfil y vuelve a Buscar.";
           }
           setBenchRouteNote(item.bench_id, message);
           paintReadingBench(item.bench_id, item.ok ? item : {});
+        }
+      }
+      for (const benchId of targets) {
+        if (successIds.includes(benchId)) continue;
+        const hit = items.find((row) => row.bench_id === benchId);
+        if (!hit) {
+          paintReadingBench(benchId, benchReadingData(benchId) || {});
+          if (!benchReadingData(benchId) || !hasFullInventory(benchReadingData(benchId))) {
+            setBenchRouteNote(benchId, payload.error || "El scraper no devolvió datos para este banco.");
+          }
         }
       }
       if (mode === "all" && payload.bench_identities) {
@@ -2784,18 +3212,22 @@
       const errors = items
         .filter((row) => row.bench_id && !successIds.includes(row.bench_id) && row.error)
         .map((row) => "Banco " + row.bench_id + ": " + row.error);
+      const recoveryLine = Array.isArray(payload.recovery) && payload.recovery.length
+        ? "Recuperación automática: " + payload.recovery.join(" · ") + ". "
+        : "";
       if (okCount) {
         const scopeLabel = mode === "all" ? okCount + " banco(s)" : "banco " + (successIds[0] || mode);
         const lanPrep = items
           .filter((row) => row.ok && row.throughput_lan_prepare)
           .map((row) => "Banco " + row.bench_id + ": " + row.throughput_lan_prepare);
         setPortalFeedback(
-          "Inventario listo en " + scopeLabel + ". Revisa la lectura abajo."
+          recoveryLine
+          + "Inventario listo en " + scopeLabel + ". Revisa la lectura abajo."
           + (lanPrep.length ? " " + lanPrep.join(" ") : "")
           + (errors.length ? " " + errors.join(" ") : "")
         );
       } else {
-        const message = errors[0] || payload.error || "El scraper no obtuvo datos del portal.";
+        const message = recoveryLine + (errors[0] || payload.error || "El scraper no obtuvo datos del portal.");
         setPortalFeedback(message);
         if (mode !== "all" && !errors.length) {
           setBenchRouteNote(mode, message);
@@ -2810,6 +3242,15 @@
       }
       saveBenchCredentialsToStorage();
       setDiscoverButtonsDisabled(mode, false);
+      restorePortalModuleTab();
+      if (portalTabBefore === "emta" || portalTabBefore === "ont") {
+        userPortalPin = portalTabBefore;
+        try {
+          sessionStorage.setItem("tc-portal-pin", portalTabBefore);
+        } catch (_err) {
+          /* ignore */
+        }
+      }
     }
 
     async function resetBench(benchId) {
@@ -2844,7 +3285,23 @@
     }
 
     loadBenchCredentialsFromStorage();
+    for (const benchId of ["A", "B"]) {
+      ensureBenchPortalCredentials(benchId);
+    }
+    if (fixAllEmtaBenchUsers(false)) {
+      setPortalFeedback(
+        "Se corrigió el usuario a admin en la tarjeta del banco (EMTA no acepta el modelo en el campo Usuario)."
+      );
+    }
+    paintEmtaUsuarioHints();
     ensurePanelBoot({panel_boot: serverPanelBoot});
+    if (userPortalPin === "emta" || userPortalPin === "ont") {
+      activePortal = userPortalPin;
+      activatePortalModule(userPortalPin);
+      alignBenchProfilesToPortalTab(userPortalPin);
+    } else {
+      focusPortalModuleFromBenches();
+    }
     if (!document.getElementById("bench-b-profile").value.trim()) {
       document.getElementById("bench-b-profile").value = document.getElementById("bench-a-profile").value.trim();
     }
@@ -2857,6 +3314,17 @@
       if (profileInput) {
         profileInput.addEventListener("change", () => applyBenchProfile(benchId));
         profileInput.addEventListener("blur", () => applyBenchProfile(benchId));
+        profileInput.addEventListener("input", () => paintEmtaUsuarioHints());
+      }
+      const userInput = document.getElementById("bench-" + prefix + "-user");
+      if (userInput) {
+        const onUserEdit = () => {
+          if (fixBenchPortalUser(benchId, true, true)) return;
+          saveBenchCredentialsToStorage();
+          syncPortalCredsFromBench(benchId);
+        };
+        userInput.addEventListener("change", onUserEdit);
+        userInput.addEventListener("blur", onUserEdit);
       }
     }
     document.getElementById("discover-benches").addEventListener("click", () => discoverBenches("all"));
@@ -2874,8 +3342,35 @@
     document.querySelectorAll("[data-bench-save-portal]").forEach((node) => {
       node.addEventListener("click", () => saveBenchPortalProfile(node.getAttribute("data-bench-save-portal")));
     });
+    function syncBenchIdentityFromInventory(benchId) {
+      const inv = benchInventories[benchId];
+      if (inv && inv.serial) {
+        benchIdentities[benchId] = Object.assign({}, benchIdentities[benchId] || {}, inv);
+        paintBenchHeader(benchId, inv);
+        return inv.serial;
+      }
+      const id = benchIdentities[benchId];
+      if (id && id.serial) {
+        paintBenchHeader(benchId, id);
+        return id.serial;
+      }
+      const reading = benchReadingData(benchId);
+      if (reading && reading.serial) {
+        const merged = mergeBenchInventory(benchId, reading);
+        benchInventories[benchId] = merged;
+        benchIdentities[benchId] = Object.assign({}, merged);
+        paintBenchHeader(benchId, merged);
+        return merged.serial;
+      }
+      const loose = benchInventories[benchId] || benchIdentities[benchId] || {};
+      if (loose.serial) {
+        paintBenchHeader(benchId, loose);
+        return loose.serial;
+      }
+      return "";
+    }
+
     async function ensureBenchReadyForCert(benchId) {
-      const prefix = benchId === "B" ? "b" : "a";
       const creds = benchCredentialFields(benchId);
       if (!creds.portal_model || !creds.portal_host || !creds.dut_user || !creds.dut_password) {
         setPortalFeedback(
@@ -2883,13 +3378,10 @@
         );
         return false;
       }
-      const snLabel = document.getElementById("bench-" + prefix + "-sn");
-      if (snLabel && snLabel.textContent.trim() === "SN —" && !benchIdentityForBench(benchId).serial) {
-        await discoverBenches(benchId);
-      }
-      const id = benchIdentityForBench(benchId);
-      if (!id.serial) {
-        setPortalFeedback("Busca el banco " + benchId + " (1 · Buscar) antes de certificar.");
+      if (!syncBenchIdentityFromInventory(benchId)) {
+        setPortalFeedback(
+          "Banco " + benchId + ": pulsa 1 · Buscar en la tarjeta (no se relanza el scraper solo al certificar)."
+        );
         return false;
       }
       return true;
@@ -2966,10 +3458,9 @@
         return false;
       }
       applyBenchIdentityForCert(benchId);
-      const module = benchDetectedFamily(benchId) || activePortal || "";
-      if (module === "ont" || module === "emta") {
-        activatePortalModule(module);
-      }
+      const module = provenBenchFamily() || resolvedPortalModule();
+      activatePortalModule(module);
+      alignBenchProfilesToPortalTab(module);
       duration.value = String(durationSeconds);
       stage.value = "simultaneous";
       setPortalFeedback(
@@ -2986,34 +3477,72 @@
       paint(fresh);
       if (!fresh.running) {
         if (showPreflightAbort(fresh)) {
+          restorePortalModuleTab();
           return false;
         }
         setPortalFeedback(
           wait
-            ? (fresh.message || started.error || "La corrida terminó al instante. Mira el log en Medición en vivo.")
+            ? (fresh.message || started.error || "La corrida terminó al instante. Revisa el mensaje arriba en esta tarjeta.")
             : "No arrancó en 15 s. Revisa credenciales del banco " + benchId + " y pulsa Recuperar namespaces."
         );
+        restorePortalModuleTab();
         return false;
       }
-      document.querySelector('.nav-item[data-tab="live"]')?.click();
-      showLiveModule();
+      openLiveTab();
       setPortalFeedback("Corriendo banco " + benchId + ". Cronómetro y log en Medición en vivo.");
       return true;
     }
 
+    async function recoverStaleNamespaces() {
+      try {
+        const response = await fetch("/api/recover", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({token})
+        });
+        const payload = await response.json();
+        if (payload && payload.ok) {
+          paint(payload);
+        }
+        return Boolean(payload && payload.ok);
+      } catch (_err) {
+        return false;
+      }
+    }
+
     async function certifyBothBenchesParallel(durationSeconds) {
+      const module = resolvedPortalModule();
+      if (module === "emta" || module === "ont") {
+        alignBenchProfilesToPortalTab(module);
+        activatePortalModule(module);
+      }
+      await recoverStaleNamespaces();
+      const status = await fetch("/api/status").then((response) => response.json());
+      if (status.dual_bench_pending) {
+        setPortalFeedback(
+          "Faltan NIC en LAN5–LAN8 (banco B). Pulsa Remapear LAN B o Remapear LAN1–LAN8 antes del throughput dual."
+        );
+        return false;
+      }
       for (const benchId of ["A", "B"]) {
         if (!(await ensureBenchReadyForCert(benchId))) {
           return false;
         }
       }
+      const famA = benchDetectedFamily("A");
+      const famB = benchDetectedFamily("B");
+      if (famA && famB && famA !== famB) {
+        setPortalFeedback("Banco A y B son tecnologías distintas (ONT vs EMTA). Certifica cada banco por separado.");
+        return false;
+      }
+      const runModule = provenBenchFamily() || module;
       applyBenchIdentityForCert("A");
       activeCertBenchId = "";
       duration.value = String(durationSeconds);
       stage.value = "simultaneous";
       dualCertQueue = {active: true};
       const started = await startRun({
-        portalModule: activePortal,
+        portalModule: runModule,
         benchId: "",
         credentialBenchId: "A"
       });
@@ -3022,6 +3551,8 @@
         setPortalFeedback(started && started.error ? started.error : "No se pudo iniciar la corrida dual.");
         return false;
       }
+      openLiveTab();
+      setPortalFeedback(started.running ? "Throughput dual en curso (8 LAN)." : "Arrancando throughput dual…");
       return true;
     }
 
@@ -3049,6 +3580,8 @@
     if (certifyBothBtn) {
       certifyBothBtn.addEventListener("click", async () => {
         if (certifyBothBtn.disabled) return;
+        certifyBothBtn.disabled = true;
+        try {
         for (const benchId of ["A", "B"]) {
           if (!(await ensureBenchReadyForCert(benchId))) {
             return;
@@ -3059,40 +3592,60 @@
           note: "Una sola corrida: iperf3 en paralelo en A (LAN1↔3, LAN2↔4) y B (LAN5↔7, LAN6↔8). El informe TC usa la identidad del banco A; ambos equipos se miden a la vez."
         });
         if (!chosenDuration) return;
-        certifyBothBtn.disabled = true;
-        let launched = false;
+        let launchAccepted = false;
+        let runStarted = false;
         try {
-          setPortalFeedback("Iniciando throughput simultáneo en bancos A y B (8 LAN)…");
-          launched = await certifyBothBenchesParallel(chosenDuration);
-          const fresh = await fetch("/api/status").then((response) => response.json());
-          paint(fresh);
-          if (fresh.running) {
-            launched = true;
-            showLiveModule();
-            setPortalFeedback("Throughput dual en curso. Cronómetro en Medición en vivo; prepara enlace/DHCP ~1–2 min.");
-          } else if (launched) {
-            const wait = await waitForRunStart(12000);
-            const again = await fetch("/api/status").then((response) => response.json());
-            paint(again);
-            if (again.running) {
-              showLiveModule();
-              setPortalFeedback("Throughput dual en curso. Cronómetro en Medición en vivo.");
-            } else {
-              setPortalFeedback(
-                wait
-                  ? "La corrida no quedó en curso. Lee el mensaje bajo Correr o el log."
-                  : (again.message || feedback.textContent || "No arrancó en 12 s. Revisa contraseñas ONT en tarjetas A y B.")
-              );
-            }
+          setPortalFeedback("Recuperando NIC y arrancando throughput A+B (8 LAN)…");
+          launchAccepted = await certifyBothBenchesParallel(Number(chosenDuration) || chosenDuration);
+          if (!launchAccepted) {
+            const msg =
+              portalFeedback && portalFeedback.textContent && portalFeedback.textContent.trim()
+                ? portalFeedback.textContent
+                : "No se pudo iniciar la corrida dual. Revisa credenciales y Buscar en A y B.";
+            setPortalFeedback(msg);
+            alert(msg);
+            restorePortalModuleTab();
+            return;
+          }
+          openLiveTab();
+          setPortalFeedback("Arrancando corrida (namespaces en 8 LAN). Revisa el log debajo en Medición en vivo…");
+          runStarted = await waitForRunStart(25000);
+          const again = await fetch("/api/status").then((response) => response.json());
+          paint(again);
+          if (again.running) {
+            setPortalFeedback(
+              "Throughput dual en curso (A+B). Cronómetro y log en Medición en vivo; enlace/DHCP ~1–2 min."
+            );
+          } else if (showPreflightAbort(again)) {
+            openLiveTab();
           } else {
-            setPortalFeedback(feedback.textContent || "No se pudo iniciar. Completa usuario/contraseña ONT en A y B.");
+            const tail = String(again.log || "").trim().split("\n").slice(-3).join(" ");
+            setPortalFeedback(
+              runStarted
+                ? "La corrida terminó al instante. " + (tail || again.message || "Revisa el log en Medición en vivo.")
+                : (again.message || "No arrancó en 25 s. Pulsa Recuperar namespaces, Buscar A+B y vuelve a intentar.")
+            );
+            if (!runStarted) {
+              restorePortalModuleTab();
+            } else {
+              document.querySelector('.nav-item[data-tab="live"]')?.click();
+            }
           }
         } finally {
           const fresh = await fetch("/api/status").then((response) => response.json());
           paint(fresh);
           certifyBothBtn.disabled = Boolean(fresh.running) || !fresh.can_launch;
-          if (!fresh.running) {
+          if (!fresh.running && !launchAccepted) {
             dualCertQueue = null;
+          }
+          if (!fresh.running && !runStarted && !launchAccepted) {
+            restorePortalModuleTab();
+          }
+        }
+        } finally {
+          const unlock = await fetch("/api/status").then((response) => response.json());
+          if (!unlock.running) {
+            certifyBothBtn.disabled = !unlock.can_launch;
           }
         }
       });
@@ -3719,7 +4272,11 @@
       document.getElementById("settings-portal-model").value = model;
       document.getElementById("settings-portal-brand").value = row.brand || inferPortalBrand(model);
       document.getElementById("settings-portal-host").value = row.host || "192.168.1.1";
-      document.getElementById("settings-portal-user").value = row.username || "";
+      document.getElementById("settings-portal-user").value = normalizeEmtaBenchUser(
+        model,
+        row.username || "",
+        row.kind || kindHintForModel(model)
+      );
       document.getElementById("settings-portal-password").value = row.password || "";
       const showPw = document.getElementById("settings-portal-show-password");
       if (showPw) showPw.checked = false;
@@ -3740,7 +4297,11 @@
     async function savePortalProfileFromSettings() {
       const model = document.getElementById("settings-portal-model").value.trim();
       const host = document.getElementById("settings-portal-host").value.trim();
-      const username = document.getElementById("settings-portal-user").value.trim();
+      const rawUser = document.getElementById("settings-portal-user").value.trim();
+      const username = normalizeEmtaBenchUser(model, rawUser, kindHintForModel(model));
+      if (username !== rawUser) {
+        document.getElementById("settings-portal-user").value = username;
+      }
       const password = document.getElementById("settings-portal-password").value;
       const line = document.getElementById("portal-profiles-line");
       if (!model || !host || !username || !password) {
@@ -3866,6 +4427,9 @@
     function mergePortalList(rows) {
       if (!Array.isArray(rows)) return;
       for (const row of rows) {
+        if (row.model && row.username) {
+          row.username = normalizeEmtaBenchUser(row.model, row.username, row.kind);
+        }
         const index = portals.findIndex((item) => item.model === row.model);
         if (index >= 0) portals[index] = row;
         else portals.push(row);
@@ -3886,7 +4450,9 @@
     document.getElementById("save-portal").addEventListener("click", async () => {
       const model = document.getElementById("portal-model").value.trim();
       const host = document.getElementById("portal-host").value.trim();
-      const username = document.getElementById("dut-user").value.trim();
+      const rawUser = document.getElementById("dut-user").value.trim();
+      const username = normalizeEmtaBenchUser(model, rawUser, kindHintForModel(model));
+      if (username !== rawUser) document.getElementById("dut-user").value = username;
       const password = document.getElementById("dut-password").value;
       if (!model || !host || !username || !password) {
         const missing = "Completa modelo, dirección, usuario y contraseña antes de guardar.";

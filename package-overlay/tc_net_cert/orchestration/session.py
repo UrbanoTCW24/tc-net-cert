@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -54,6 +55,7 @@ from tc_net_cert.dut.huawei import (
     portal_retryable,
     valid_job,
 )
+from tc_net_cert.dut.kind import infer_dut_type
 from tc_net_cert.dut.portals import load_portals
 from tc_net_cert.ethtool.link import explain_link_down, settle_link
 from tc_net_cert.iperf.runner import IperfPool
@@ -206,7 +208,6 @@ class CertificationSession:
     def execute(self) -> CertificationReport:
         started_utc, started_local = _stamps()
         from tc_net_cert.dut.huawei import PORTAL_MODULE_ENV
-        from tc_net_cert.dut.kind import infer_dut_type
 
         portal_module = os.environ.get(PORTAL_MODULE_ENV, "").strip().lower()
         if portal_module in {"ont", "emta"}:
@@ -276,6 +277,7 @@ class CertificationSession:
         try:
             self.audit.write_raw("system/config.snapshot.json", self.config.model_dump_json(indent=2))
             self._announce()
+            self._recover_stale_lab_namespaces()
             discovered = discover_interfaces(self.executor)
             for note in scrub_lab_port_default_routes(
                 self.executor,
@@ -308,6 +310,7 @@ class CertificationSession:
                 self.abort = "; ".join(f"{item.name}: {item.detail}" for item in failed)
                 raise PreflightError(self.abort)
             capture_usb_inventory(self.executor, run_dir / "raw" / "system")
+            self._wake_cg3000_throughput_lan_ports()
             self._prepare(interfaces)
             if "physical" in self.stages:
                 self._physical()
@@ -385,12 +388,103 @@ class CertificationSession:
             self.moved.add(endpoint.logical_name)
             self._persist_active()
 
+    def _recover_stale_lab_namespaces(self) -> None:
+        """Leftover ns-lan* from a crash hide NICs from root and block preflight/iperf."""
+        from tc_net_cert.orchestration.recover import recover
+
+        stale = [
+            name
+            for name in self.manager.list_namespaces()
+            if name.startswith("ns-lan") or name.startswith("ns-tcnc-")
+        ]
+        if not stale:
+            return
+        self.notify("RECOVER limpiando " + ", ".join(stale) + " antes de la corrida…")
+        for line in recover(self.executor, force_prefixes=True):
+            self.notify(f"RECOVER {line}")
+
     def _handoff_interface_to_namespace(self, endpoint: Endpoint) -> None:
         """Drop root-namespace DHCP/IP so the ONT can answer again inside ns-lan*."""
         iface = endpoint.interface
         stop_dhcpcd_on_host(self.executor, iface)
         self.executor.run(["ip", "addr", "flush", "dev", iface], timeout=10, interface=iface)
         self.executor.run(["ip", "-4", "route", "flush", "dev", iface], timeout=10, interface=iface)
+
+    def _wake_cg3000_throughput_lan_ports(self) -> None:
+        """CG-3000 disables ETH1 until energy management is applied; throughput uses LAN1."""
+        import time
+
+        if self.config.dut.type != "emta":
+            return
+        from tc_net_cert.config.benches import bench_ports
+        from tc_net_cert.dut.broadcom import prepare_cg3000_throughput_lan
+        from tc_net_cert.dut.huawei import valid_password, valid_user
+        from tc_net_cert.storage.bench_identity import load_bench_inventory
+        from tc_net_cert.web.discover_benches import (
+            _bench_static_portal_paths,
+            _filter_bench_cables,
+            _sort_bench_cables,
+            resolve_bench_cables,
+        )
+
+        bench_cred = _load_bench_credentials_env()
+        default_user = os.environ.get(USER_ENV, "").strip()
+        default_password = os.environ.get(PASSWORD_ENV, "")
+        default_host = os.environ.get(HOST_ENV, "").strip() or "192.168.1.1"
+        scope = self._opening_bench_scope()
+        bench_ids = ["A", "B"] if scope == "A+B" else (["B"] if scope == "B" else ["A"])
+        woke = False
+        for bench_id in bench_ids:
+            inv = load_bench_inventory(bench_id)
+            model_fold = re.sub(r"[^A-Z0-9]", "", str(inv.get("model") or self.config.dut.model or "").upper())
+            if model_fold not in {"CG3000"} and "CG3000" not in model_fold:
+                continue
+            user, password, host = _bench_portal_credentials(
+                bench_id,
+                bench_cred,
+                default_user=default_user,
+                default_password=default_password,
+                default_host=default_host,
+            )
+            if not valid_user(user) or not valid_password(password):
+                self.notify(f"ENERGÍA banco {bench_id}: sin usuario/clave portal — activa ETH1 manualmente.")
+                continue
+            host = host or str(inv.get("gateway") or default_host).strip()
+            if not allowed_host(host):
+                continue
+            macs = {m.lower() for m in bench_ports(self.config, bench_id).values() if m}
+            cables, _err = resolve_bench_cables(macs, host)
+            cables = _filter_bench_cables(self.config, _sort_bench_cables(cables), macs)
+            if not cables:
+                static = _bench_static_portal_paths(macs, host)
+                cables = _filter_bench_cables(self.config, static, macs)
+            iface = str(inv.get("iface") or "").strip()
+            if iface and not any(str(row.get("iface") or "") == iface for row in cables):
+                cables = [{"iface": iface, "source": "", "gateway": host}, *cables]
+            if not cables:
+                self.notify(
+                    f"ENERGÍA banco {bench_id}: sin ruta al portal en LAN del banco — Buscar o Remapear LAN."
+                )
+                continue
+            note = ""
+            for cable in cables:
+                trial = prepare_cg3000_throughput_lan(
+                    host,
+                    user,
+                    password,
+                    str(cable.get("source") or ""),
+                    str(cable.get("iface") or ""),
+                )
+                note = trial
+                if any(
+                    token in trial.lower()
+                    for token in ("verificado", "activado", "eth3:1", "ya estaba activo")
+                ):
+                    break
+            self.notify(f"ENERGÍA banco {bench_id}: {note}")
+            woke = True
+        if woke:
+            time.sleep(5.0)
 
     def _physical(self) -> None:
         import time
@@ -399,11 +493,19 @@ class CertificationSession:
         if self.endpoints:
             time.sleep(2.0)
         for endpoint in self.endpoints:
+            if self.config.dut.type == "emta" and endpoint.logical_name in {"LAN1", "LAN5"}:
+                self.executor.run(
+                    ["ethtool", "-r", endpoint.interface],
+                    namespace=endpoint.namespace,
+                    interface=endpoint.interface,
+                    timeout=15,
+                )
+                time.sleep(1.5)
             link = settle_link(
                 self.executor,
                 endpoint.interface,
                 endpoint.namespace,
-                attempts=36,
+                attempts=48,
             )
             endpoint.supported_speeds_mbps = list(link.supported_speeds_mbps)
             endpoint.driver = link.driver or endpoint.driver
@@ -1761,8 +1863,6 @@ def _seed_bench_duts(report: CertificationReport) -> None:
         inv = load_bench_inventory(bench_id)
         if not str(inv.get("serial") or "").strip():
             continue
-        from tc_net_cert.dut.kind import infer_dut_type
-
         seeded = DutIdentity(
             type=str(inv.get("family") or report.dut.type or "ont"),
             brand=str(inv.get("brand") or ""),

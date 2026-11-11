@@ -28,6 +28,24 @@ _DEFAULTS = {
         "password": "c1@r0",
         "kind": "huawei-ont",
     },
+    "CG-3000": {
+        "host": "192.168.1.1",
+        "username": "admin",
+        "password": "Cl@r0",
+        "kind": "emta-broadcom",
+    },
+    "CG-2200": {
+        "host": "192.168.1.1",
+        "username": "admin",
+        "password": "Cl@r0",
+        "kind": "emta-broadcom",
+    },
+    "CGNV5": {
+        "host": "192.168.1.1",
+        "username": "admin",
+        "password": "Cl@r0",
+        "kind": "emta-hitron",
+    },
 }
 
 
@@ -45,6 +63,57 @@ def portals_path() -> Path:
 
 def valid_model(value: str) -> bool:
     return bool(_MODEL_RE.fullmatch(value))
+
+
+def _username_looks_like_model(model: str, username: str) -> bool:
+    """True when the saved login is the commercial model, not a portal user."""
+    token = (model or "").strip().upper().replace(" ", "")
+    user = (username or "").strip().upper().replace(" ", "")
+    if not token or not user:
+        return False
+    if user == token:
+        return True
+    canon = canonical_profile_model(model).upper().replace(" ", "")
+    if user == canon:
+        return True
+    if user in {"KAON", "CG-2200", "CG2200", "CG-3000", "CG3000"} and (
+        token.startswith("CG") or token == "KAON"
+    ):
+        return True
+    if _CG_MODEL.fullmatch(user.replace("-", "")) or _CGNV.fullmatch(user.replace("-", "")):
+        return True
+    return False
+
+
+def normalize_emta_portal_username(model: str, username: str, item: dict | None = None) -> str:
+    """Broadcom/Hitron EMTA portals expect ``admin``, not the model name in the user field."""
+    kind = infer_portal_kind(model, item if isinstance(item, dict) else {})
+    if not kind.startswith("emta"):
+        return username
+    if _username_looks_like_model(model, username):
+        return "admin"
+    return username
+
+
+def repair_emta_portal_logins(path: Path | None = None) -> int:
+    """Rewrite profiles that stored the model as usuario. Returns how many were fixed."""
+    file = path or portals_path()
+    current = load_portals(file)
+    fixed = 0
+    for model, item in list(current.items()):
+        if not isinstance(item, dict):
+            continue
+        user = str(item.get("username") or "")
+        if not _username_looks_like_model(model, user):
+            continue
+        kind = infer_portal_kind(model, item)
+        if not kind.startswith("emta"):
+            continue
+        host = str(item.get("host") or "192.168.1.1")
+        password = str(item.get("password") or "Cl@r0")
+        save_portal(file, model, host, "admin", password, kind=kind)
+        fixed += 1
+    return fixed
 
 
 def canonical_profile_model(model: str) -> str:
@@ -234,7 +303,7 @@ def load_portals(path: Path | None = None) -> dict[str, dict[str, str]]:
         if not isinstance(item, dict) or not valid_model(str(model)):
             continue
         host = str(item.get("host") or "")
-        username = str(item.get("username") or "")
+        username = normalize_emta_portal_username(str(model), str(item.get("username") or ""), item)
         password = str(item.get("password") or "")
         if not allowed_host(host) or not valid_user(username) or not valid_password(password):
             continue
@@ -253,9 +322,18 @@ def ensure_portals(path: Path | None = None) -> dict[str, dict[str, str]]:
     file = path or portals_path()
     current = load_portals(file)
     if current:
-        return current
+        repair_emta_portal_logins(file)
+        return load_portals(file)
     for model, item in _DEFAULTS.items():
-        save_portal(file, model, item["host"], item["username"], item["password"])
+        kind = str(item.get("kind") or "")
+        save_portal(
+            file,
+            model,
+            item["host"],
+            item["username"],
+            item["password"],
+            kind=kind,
+        )
     return load_portals(file)
 
 
