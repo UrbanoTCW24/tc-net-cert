@@ -367,6 +367,7 @@
           <button id="stop" class="stop" type="button" {% if not job.running %}disabled{% endif %}>Detener</button>
           </div>
           <p class="note">Si Correr no arranca o quedan colgados <code>ns-lan*</code>, pulsa <strong>Recuperar namespaces</strong> y vuelve a intentar.</p>
+          <p id="panel-launch-note" class="note" hidden></p>
           {% if not job.can_launch %}<p class="note">Falta pkexec, así que este panel no puede pedir permiso para mover las NIC.</p>{% endif %}
           <p id="feedback" class="note"></p>
           <pre id="log" {% if not job.log %}hidden{% endif %}>{{ job.log }}</pre>
@@ -902,6 +903,18 @@
     refreshSystemStatus();
     const stationPortCount = {{ port_count | tojson }};
     const panelPrivileged = {{ job.privileged | tojson }};
+    const panelCanLaunch = {{ job.can_launch | tojson }};
+    (function () {
+      const note = document.getElementById("panel-launch-note");
+      if (!note) return;
+      if (panelPrivileged) {
+        note.textContent = "Panel con permisos de red (servicio root): Correr y Throughput A+B no piden contraseña.";
+        note.hidden = false;
+      } else if (!panelCanLaunch) {
+        note.textContent = "Falta pkexec/zenity: este panel no puede mover NIC ni certificar.";
+        note.hidden = false;
+      }
+    })();
     const portals = {{ portals | tojson }};
     let portalRows = {{ portal_rows | tojson }};
     const stage = document.getElementById("stage");
@@ -1318,6 +1331,21 @@
       }
       banner.hidden = !job.running && !job.message;
       banner.textContent = job.message || "";
+      if (
+        !job.running &&
+        portalFeedback &&
+        /Recuperando NIC|Arrancando throughput|Iniciando throughput/i.test(portalFeedback.textContent || "")
+      ) {
+        if (job.message) {
+          setPortalFeedback(job.message);
+        } else if (job.log && job.log.includes("FINAL RESULT")) {
+          setPortalFeedback(
+            job.log.includes("FINAL RESULT: PASS")
+              ? "Última corrida: PASS. Pulsa de nuevo 2 · Throughput A+B para medir otra vez."
+              : "Última corrida terminó. Revisa el log en Medición en vivo."
+          );
+        }
+      }
       if (job.log) {
         log.hidden = false;
         log.textContent = job.log;
@@ -1964,6 +1992,43 @@
     let activeCertBenchId = "";
     let suppressBenchReadingsPoll = false;
     let suppressBenchIdentitiesPoll = false;
+    let statusPollPaused = 0;
+    let statusPollInFlight = false;
+    let statusPollGapMs = 2000;
+    let statusPollLastAt = 0;
+
+    function pauseStatusPoll() {
+      statusPollPaused += 1;
+    }
+
+    function resumeStatusPoll() {
+      statusPollPaused = Math.max(0, statusPollPaused - 1);
+    }
+
+    async function fetchStatusPaint() {
+      const response = await fetch("/api/status");
+      const job = await response.json();
+      paint(job);
+      return job;
+    }
+
+    async function pollStatusTick() {
+      if (statusPollPaused > 0 || statusPollInFlight) return;
+      const now = Date.now();
+      if (now - statusPollLastAt < statusPollGapMs) return;
+      statusPollInFlight = true;
+      try {
+        const job = await fetchStatusPaint();
+        statusPollLastAt = Date.now();
+        statusPollGapMs = job.running ? 600 : 2000;
+      } catch (_err) {
+        /* saturated panel — back off instead of stacking requests */
+        statusPollLastAt = Date.now();
+        statusPollGapMs = Math.min(statusPollGapMs + 500, 8000);
+      } finally {
+        statusPollInFlight = false;
+      }
+    }
     const benchIdentities = {A: {}, B: {}};
     const benchInventories = {A: {}, B: {}};
 
@@ -2588,6 +2653,7 @@
         return {ok: false, error: missing};
       }
       button.disabled = true;
+      pauseStatusPoll();
       const waiting = panelPrivileged
         ? "Arrancando la corrida (namespaces y DHCP en las 8 LAN)…"
         : "Pidiendo permiso… escribe la contraseña en la ventana.";
@@ -2628,6 +2694,8 @@
         setPortalFeedback(lost);
         button.disabled = false;
         return {ok: false, error: lost};
+      } finally {
+        resumeStatusPoll();
       }
       if (!started.ok) {
         activeCertBenchId = "";
@@ -3038,10 +3106,23 @@
     function finishCertBenchCleanup(job) {
       const fromJob = job && job.bench_id ? String(job.bench_id).toUpperCase() : "";
       const benchId = activeCertBenchId || fromJob || "";
+      const dualRun = !benchId && stationPortCount >= 8;
+      activeCertBenchId = "";
+      if (dualRun) {
+        suppressBenchReadingsPoll = false;
+        if (job && job.bench_readings) {
+          applyBenchReadings(job.bench_readings);
+        }
+        const hint =
+          job && job.exit_code === 0
+            ? "Throughput A+B terminado."
+            : "Throughput A+B finalizado.";
+        setPortalFeedback(hint + " Puedes volver a pulsar 2 · Throughput A+B o ver Historial.");
+        return;
+      }
       suppressBenchReadingsPoll = true;
       clearBenchReadingUi(benchId);
       persistClearBenchReading(benchId);
-      activeCertBenchId = "";
       const hint =
         job && job.exit_code === 0
           ? "Certificación terminada."
@@ -3081,6 +3162,8 @@
     }
 
     async function discoverBenches(scope) {
+      pauseStatusPoll();
+      try {
       const mode = normalizeBenchScope(scope);
       const targets = mode === "all" ? ["A", "B"] : [mode];
       const portalTabBefore = userPortalPin || activePortal;
@@ -3250,6 +3333,9 @@
         } catch (_err) {
           /* ignore */
         }
+      }
+      } finally {
+        resumeStatusPoll();
       }
     }
 
@@ -3425,14 +3511,19 @@
     }
 
     async function waitForRunStart(timeoutMs) {
-      const deadline = Date.now() + (timeoutMs || 20000);
+      const deadline = Date.now() + (timeoutMs || 45000);
       while (Date.now() < deadline) {
-        const job = await fetch("/api/status").then((response) => response.json());
-        paint(job);
+        let job;
+        try {
+          job = await fetchStatusPaint();
+        } catch (_err) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          continue;
+        }
         if (job.running) {
           return true;
         }
-        await new Promise((resolve) => setTimeout(resolve, 350));
+        await new Promise((resolve) => setTimeout(resolve, 800));
       }
       return false;
     }
@@ -3514,8 +3605,8 @@
       const module = resolvedPortalModule();
       if (module === "emta" || module === "ont") {
         alignBenchProfilesToPortalTab(module);
-        activatePortalModule(module);
       }
+      openLiveTab();
       await recoverStaleNamespaces();
       const status = await fetch("/api/status").then((response) => response.json());
       if (status.dual_bench_pending) {
@@ -3523,11 +3614,6 @@
           "Faltan NIC en LAN5–LAN8 (banco B). Pulsa Remapear LAN B o Remapear LAN1–LAN8 antes del throughput dual."
         );
         return false;
-      }
-      for (const benchId of ["A", "B"]) {
-        if (!(await ensureBenchReadyForCert(benchId))) {
-          return false;
-        }
       }
       const famA = benchDetectedFamily("A");
       const famB = benchDetectedFamily("B");
@@ -3582,6 +3668,8 @@
         if (certifyBothBtn.disabled) return;
         certifyBothBtn.disabled = true;
         try {
+        syncBenchIdentityFromInventory("A");
+        syncBenchIdentityFromInventory("B");
         for (const benchId of ["A", "B"]) {
           if (!(await ensureBenchReadyForCert(benchId))) {
             return;
@@ -3594,6 +3682,8 @@
         if (!chosenDuration) return;
         let launchAccepted = false;
         let runStarted = false;
+        pauseStatusPoll();
+        openLiveTab();
         try {
           setPortalFeedback("Recuperando NIC y arrancando throughput A+B (8 LAN)…");
           launchAccepted = await certifyBothBenchesParallel(Number(chosenDuration) || chosenDuration);
@@ -3609,9 +3699,13 @@
           }
           openLiveTab();
           setPortalFeedback("Arrancando corrida (namespaces en 8 LAN). Revisa el log debajo en Medición en vivo…");
-          runStarted = await waitForRunStart(25000);
-          const again = await fetch("/api/status").then((response) => response.json());
-          paint(again);
+          runStarted = await waitForRunStart(60000);
+          let again;
+          try {
+            again = await fetchStatusPaint();
+          } catch (_err) {
+            again = {};
+          }
           if (again.running) {
             setPortalFeedback(
               "Throughput dual en curso (A+B). Cronómetro y log en Medición en vivo; enlace/DHCP ~1–2 min."
@@ -3632,8 +3726,13 @@
             }
           }
         } finally {
-          const fresh = await fetch("/api/status").then((response) => response.json());
-          paint(fresh);
+          resumeStatusPoll();
+          let fresh = {};
+          try {
+            fresh = await fetchStatusPaint();
+          } catch (_err) {
+            fresh = {};
+          }
           certifyBothBtn.disabled = Boolean(fresh.running) || !fresh.can_launch;
           if (!fresh.running && !launchAccepted) {
             dualCertQueue = null;
@@ -3643,7 +3742,12 @@
           }
         }
         } finally {
-          const unlock = await fetch("/api/status").then((response) => response.json());
+          let unlock = {};
+          try {
+            unlock = await fetchStatusPaint();
+          } catch (_err) {
+            unlock = {};
+          }
           if (!unlock.running) {
             certifyBothBtn.disabled = !unlock.can_launch;
           }
@@ -4489,11 +4593,8 @@
     });
 
     setInterval(tick, 250);
-    setInterval(async () => {
-      const response = await fetch("/api/status");
-      paint(await response.json());
-    }, 500);
-    fetch("/api/status").then((response) => response.json()).then(paint);
+    setInterval(pollStatusTick, 300);
+    fetchStatusPaint().catch(() => ({}));
   </script>
 </body>
 </html>

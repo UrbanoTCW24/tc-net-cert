@@ -10,13 +10,17 @@ from tc_net_cert.web.console import ConsoleBusy, _ASKPASS, _HELPER, _SUDO, _ZENI
 
 
 def run_helper(*args: str, timeout: int = 180) -> subprocess.CompletedProcess[str]:
-    if not (_passwordless() or (_SUDO.is_file() and _ZENITY.is_file() and _ASKPASS.is_file())):
+    # tc-net-cert-web.service runs as root; call the helper directly (no sudo/zenity).
+    if os.geteuid() == 0:
+        argv = [str(_HELPER), *args]
+    elif not (_passwordless() or (_SUDO.is_file() and _ZENITY.is_file() and _ASKPASS.is_file())):
         raise ConsoleBusy("Este panel no puede pedir permisos de administrador.")
-    argv = [str(_HELPER), *args]
-    if _passwordless():
-        argv = [str(_SUDO), "-n", "--", *argv]
     else:
-        argv = [str(_SUDO), "-A", "--", *argv]
+        argv = [str(_HELPER), *args]
+        if _passwordless():
+            argv = [str(_SUDO), "-n", "--", *argv]
+        else:
+            argv = [str(_SUDO), "-A", "--", *argv]
     env = os.environ.copy()
     env["DISPLAY"] = os.environ.get("DISPLAY", ":0")
     env["XDG_RUNTIME_DIR"] = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")

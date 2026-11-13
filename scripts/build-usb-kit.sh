@@ -126,6 +126,58 @@ O descargar kit ${VER} y ejecutar:
   sudo bash /tmp/tc-kit/provision/install-station.sh
 EOF
 
+cat >"${OUT}/INSTALAR-OTRA-PC.txt" <<EOF
+TECHCORP LAB — instalar en otra máquina (Ubuntu 64 bits)
+========================================================
+Versión del kit: ${VER}
+Wheel: ${BASENAME}
+SHA256: ${SHA256}
+
+Esta carpeta (kit en la USB) suele ser:
+  .../TECHCORP-LAB-ubuntu/kit-${VER}/
+(o el mismo contenido si extrajiste tc-net-cert-install-${VER}.tar.gz)
+
+--- PC nueva (8 LAN de prueba) ---
+
+  cd /media/\$USER/.../TECHCORP-LAB-ubuntu/kit-${VER}
+  sudo TC_NET_CERT_LAYOUT=8lan bash provision/install-station.sh
+
+PC nueva (solo 4 LAN): use TC_NET_CERT_LAYOUT=4lan en lugar de 8lan.
+
+--- Ya tiene TECHCORP (solo actualizar software, no toca config.yaml) ---
+
+  cd .../kit-${VER}
+  sudo bash provision/actualizar-offline.sh
+
+--- Instalador clásico de la USB (wheels + código fuente) ---
+
+  cd .../TECHCORP-LAB-ubuntu
+  sudo bash instalar.sh
+
+--- Después de instalar (cualquier opción) ---
+
+  1. Editar /etc/tc-net-cert/config.yaml (MACs, station, operador).
+  2. Opcional: copiar privado/supabase.env y privado/portals.yaml de la USB
+     a /root/.config/tc-net-cert/ (chmod 0600 en supabase.env).
+  3. Abrir el panel: http://127.0.0.1:8080/
+
+--- Volver a compilar el kit (estación LAB-002) ---
+
+  cd ~/tc-net-cert-dev
+  bash scripts/build-usb-kit.sh
+  Copiar dist_usb/ a la USB, por ejemplo:
+    rsync -a dist_usb/ /media/\$USER/.../TECHCORP-LAB-ubuntu/kit-${VER}/
+
+--- Instalación por Internet (si existe release en GitHub) ---
+
+  curl -fsSL https://raw.githubusercontent.com/UrbanoTCW24/tc-net-cert/main/scripts/install-online.sh | sudo bash
+
+  O descargar el tar ${VER}:
+    curl -fsSL -o kit.tar.gz "${INSTALL_URL}"
+    sudo mkdir -p /tmp/tc-kit && sudo tar -xzf kit.tar.gz -C /tmp/tc-kit
+    sudo bash /tmp/tc-kit/provision/install-station.sh
+EOF
+
 log "Kit listo: ${OUT}"
 log "Wheel: ${BASENAME} (${VER})"
 log "Instalador tar: ${INSTALL_TAR}"

@@ -11,6 +11,7 @@ import os
 import re
 import secrets
 import subprocess
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
@@ -284,7 +285,7 @@ def _handler(
                 return
             if path == "/api/status":
                 _config, ports = self._station_view()
-                self._json(200, _status_payload(root, console, monitor, ports))
+                self._json(200, _status_payload(root, console, monitor, ports, config=_config))
                 return
             if path == "/api/system/status":
                 if not _local_request(self):
@@ -1406,6 +1407,23 @@ def _run_stored_in_cloud(run_id: str, report: dict, stored: set[str]) -> bool:
     return run_synced_in_cloud(run_id, report, stored)
 
 
+_CATALOG_CACHE: tuple[float, list[dict]] | None = None
+_CATALOG_CACHE_TTL_S = 8.0
+
+
+def _catalog_cached(root: Path, stored: set[str] | None = None) -> list[dict]:
+    global _CATALOG_CACHE
+    now = time.monotonic()
+    if stored is None and _CATALOG_CACHE is not None:
+        cached_at, rows = _CATALOG_CACHE
+        if now - cached_at < _CATALOG_CACHE_TTL_S:
+            return rows
+    rows = _catalog(root, stored=stored)
+    if stored is None:
+        _CATALOG_CACHE = (now, rows)
+    return rows
+
+
 def _catalog(root: Path, stored: set[str] | None = None) -> list[dict]:
     from tc_net_cert.storage.runs import find_run, list_archived_reports
 
@@ -1754,25 +1772,31 @@ def _status_payload(
     console: Console,
     monitor: TrafficMonitor,
     ports: dict[str, str],
+    *,
+    config=None,
 ) -> dict:
     payload = console.status()
-    finished = [run["run_id"] for run in _catalog(root) if run["has_report"]]
+    finished = [run["run_id"] for run in _catalog_cached(root) if run["has_report"]]
     payload["latest_run_id"] = finished[0] if finished else ""
+    if config is None:
+        try:
+            config, _loaded = load_config(console.config_path)
+        except Exception:
+            config = None
     try:
-        config, _loaded = load_config(console.config_path)
-        ports = live_ports_mac_map(config)
+        if config is not None:
+            ports = live_ports_mac_map(config)
     except Exception:
-        config = None
+        pass
     active_ports: set[str] | None = None
     try:
-        if config is None:
-            config, _loaded = load_config(console.config_path)
-        from tc_net_cert.config.benches import bench_port_list
+        if config is not None:
+            from tc_net_cert.config.benches import bench_port_list
 
-        bench = str(payload.get("bench_id") or "").strip().upper()
-        if bench:
-            names = bench_port_list(config, bench)
-            active_ports = set(names) if names else None
+            bench = str(payload.get("bench_id") or "").strip().upper()
+            if bench:
+                names = bench_port_list(config, bench)
+                active_ports = set(names) if names else None
     except Exception:
         active_ports = None
     payload["live"] = monitor.sample(
@@ -1783,12 +1807,16 @@ def _status_payload(
         active_ports=active_ports,
     )
     try:
-        if config is None:
-            config, _loaded = load_config(console.config_path)
-        payload["bench_map"] = {
-            key: bench.model_dump(mode="json") for key, bench in resolve_benches(config).items()
-        }
-        payload["dual_bench_pending"] = any(not mac for name, mac in ports.items() if name in {"LAN5", "LAN6", "LAN7", "LAN8"})
+        if config is not None:
+            payload["bench_map"] = {
+                key: bench.model_dump(mode="json") for key, bench in resolve_benches(config).items()
+            }
+            payload["dual_bench_pending"] = any(
+                not mac for name, mac in ports.items() if name in {"LAN5", "LAN6", "LAN7", "LAN8"}
+            )
+        else:
+            payload["bench_map"] = {}
+            payload["dual_bench_pending"] = False
     except Exception:
         payload["bench_map"] = {}
         payload["dual_bench_pending"] = False

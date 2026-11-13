@@ -1,9 +1,9 @@
 {
-  "version": "1.3.0",
-  "url": "https://github.com/UrbanoTCW24/tc-net-cert/releases/download/v1.3.0/tc_net_cert-1.3.0-py3-none-any.whl",
+  "version": "1.3.1",
+  "url": "https://github.com/UrbanoTCW24/tc-net-cert/releases/download/v1.3.1/tc_net_cert-1.3.1-py3-none-any.whl",
   "mandatory": false,
   "channel": "lab",
-  "sha256": "20ebe4f637041ce89e43ef23e0cb5412871a99a7586222d601ddbf4e79ec7771",
-  "wheel": "tc_net_cert-1.3.0-py3-none-any.whl",
-  "note": "Manifiesto único para todas las estaciones. Actualícelo en cada tag vX.Y.Z."
+  "sha256": "f30c3bc63bdfccbacf7a87f2dea733c4ad4347e7108c827786b34343ab681b3c",
+  "wheel": "tc_net_cert-1.3.1-py3-none-any.whl",
+  "note": "Panel: polling estable, throughput A+B, kit USB INSTALAR-OTRA-PC.txt."
 }
